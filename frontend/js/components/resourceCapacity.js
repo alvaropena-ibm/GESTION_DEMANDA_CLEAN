@@ -8,6 +8,10 @@ import { API_CONFIG } from '../config/data.js';
 // Global state
 let capacityData = null;
 let currentYear = new Date().getFullYear();
+let allResources = [];
+let filteredResources = [];
+let currentCapacityPage = 1;
+const capacityEntriesPerPage = 10;
 
 /**
  * Initialize resource capacity management
@@ -538,9 +542,132 @@ function updateSkillsAvailabilityChart(skillsData) {
 }
 
 /**
+ * Apply filters to resources
+ */
+function applyCapacityFilters() {
+    const searchInput = document.getElementById('capacity-search');
+    
+    let resources = [...allResources];
+    
+    // Filter by search text (resource name or skills)
+    if (searchInput && searchInput.value.trim()) {
+        const searchText = searchInput.value.trim().toLowerCase();
+        resources = resources.filter(resource => {
+            const resourceName = (resource.name || '').toLowerCase();
+            const skills = resource.resourceSkills || resource.skills || [];
+            const skillNames = skills.map(s => (s.skillName || s.name || '').toLowerCase()).join(' ');
+            
+            return resourceName.includes(searchText) || skillNames.includes(searchText);
+        });
+    }
+    
+    console.log(`🔍 Capacity filters applied: ${resources.length} of ${allResources.length} resources`);
+    
+    filteredResources = resources;
+    currentCapacityPage = 1; // Reset to first page when filters change
+    renderCurrentCapacityPage();
+}
+
+/**
+ * Render current page of resources
+ */
+function renderCurrentCapacityPage() {
+    const startIndex = (currentCapacityPage - 1) * capacityEntriesPerPage;
+    const endIndex = startIndex + capacityEntriesPerPage;
+    const pageResources = filteredResources.slice(startIndex, endIndex);
+    
+    renderCapacityTable(pageResources, capacityData?.currentMonth || new Date().getMonth() + 1);
+    updateCapacityPaginationInfo();
+}
+
+/**
+ * Update pagination information and controls
+ */
+function updateCapacityPaginationInfo() {
+    const totalResources = filteredResources.length;
+    const totalPages = Math.ceil(totalResources / capacityEntriesPerPage);
+    const startIndex = totalResources === 0 ? 0 : (currentCapacityPage - 1) * capacityEntriesPerPage + 1;
+    const endIndex = Math.min(currentCapacityPage * capacityEntriesPerPage, totalResources);
+    
+    // Update info text
+    const infoText = document.getElementById('capacity-info-text');
+    if (infoText) {
+        infoText.textContent = `Showing ${startIndex}-${endIndex} of ${totalResources} resources`;
+    }
+    
+    // Update page number
+    const currentPageSpan = document.getElementById('capacity-current-page');
+    if (currentPageSpan) {
+        currentPageSpan.textContent = `Page ${currentCapacityPage} of ${totalPages || 1}`;
+    }
+    
+    // Update button states
+    const prevBtn = document.getElementById('capacity-prev-btn');
+    const nextBtn = document.getElementById('capacity-next-btn');
+    
+    if (prevBtn) {
+        prevBtn.disabled = currentCapacityPage === 1;
+    }
+    
+    if (nextBtn) {
+        nextBtn.disabled = currentCapacityPage >= totalPages || totalPages === 0;
+    }
+}
+
+/**
+ * Load previous page
+ */
+function loadPreviousCapacityPage() {
+    if (currentCapacityPage > 1) {
+        currentCapacityPage--;
+        renderCurrentCapacityPage();
+    }
+}
+
+/**
+ * Load next page
+ */
+function loadNextCapacityPage() {
+    const totalPages = Math.ceil(filteredResources.length / capacityEntriesPerPage);
+    if (currentCapacityPage < totalPages) {
+        currentCapacityPage++;
+        renderCurrentCapacityPage();
+    }
+}
+
+/**
  * Update capacity matrix table
  */
 function updateCapacityMatrix(resources, currentMonth) {
+    // Store all resources globally
+    allResources = resources || [];
+    filteredResources = [...allResources];
+    currentCapacityPage = 1;
+    
+    // Setup search listener
+    const searchInput = document.getElementById('capacity-search');
+    if (searchInput) {
+        // Remove existing listener
+        const newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+        
+        // Add new listener
+        newSearchInput.addEventListener('input', applyCapacityFilters);
+    }
+    
+    // Expose functions globally
+    window.loadPreviousCapacityPage = loadPreviousCapacityPage;
+    window.loadNextCapacityPage = loadNextCapacityPage;
+    window.applyCapacityFilters = applyCapacityFilters;
+    
+    // Render first page
+    renderCurrentCapacityPage();
+}
+
+/**
+ * Render capacity table with given resources
+ */
+function renderCapacityTable(resources, currentMonth) {
     const tableBody = document.getElementById('capacity-table-body');
     if (!tableBody) {
         console.warn('Capacity table body not found');

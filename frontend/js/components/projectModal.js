@@ -104,8 +104,9 @@ export function openCreateProjectModal() {
 /**
  * Open modal for editing an existing project
  * @param {Object} project - Project data
+ * @param {string} source - Source of the call ('projects' or 'tasks')
  */
-export function openEditProjectModal(project) {
+export function openEditProjectModal(project, source = 'projects') {
     isEditMode = true;
     currentProjectId = project.id;
     
@@ -161,12 +162,29 @@ export function openEditProjectModal(project) {
     
     document.getElementById('projectStatus').value = project.status;
     
-    // Update title with icon, project code and title
+    // Set delivery hours if available (only for projects, not tasks)
+    const deliveryHoursGroup = document.getElementById('projectDeliveryHours')?.closest('.form-group');
+    if (source === 'tasks') {
+        // Hide delivery hours field for tasks
+        if (deliveryHoursGroup) {
+            deliveryHoursGroup.style.display = 'none';
+        }
+    } else {
+        // Show and populate delivery hours for projects
+        if (deliveryHoursGroup) {
+            deliveryHoursGroup.style.display = 'block';
+        }
+        const deliveryHours = project.deliveryHours || project.delivery_hours;
+        document.getElementById('projectDeliveryHours').value = deliveryHours || '';
+    }
+    
+    // Update title based on source
+    const titleText = source === 'tasks' ? 'Editar Trabajo' : 'Editar Solicitud';
     title.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 24px; height: 24px; display: inline-block; margin-right: 8px; vertical-align: middle;">
             <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
         </svg>
-        Editar Proyecto - ${project.code} - ${project.title}
+        ${titleText} - ${project.code} - ${project.title}
     `;
     
     // Show modal
@@ -375,6 +393,12 @@ export async function saveProject() {
         return;
     }
     
+    // Get delivery hours value
+    const deliveryHoursValue = document.getElementById('projectDeliveryHours').value.trim();
+    console.log('🔍 DEBUG - deliveryHoursValue RAW:', deliveryHoursValue);
+    console.log('🔍 DEBUG - deliveryHoursValue isEmpty:', deliveryHoursValue === '');
+    console.log('🔍 DEBUG - deliveryHoursValue parsed:', deliveryHoursValue === '' ? null : parseFloat(deliveryHoursValue));
+    
     const formData = {
         code: document.getElementById('projectCode').value.trim(),
         type: typeValue === '' ? null : typeValue, // Explicitly set to null if empty
@@ -385,10 +409,13 @@ export async function saveProject() {
         startDate: startDateValue === '' ? null : startDateValue,
         endDate: endDateValue === '' ? null : endDateValue,
         status: parseInt(document.getElementById('projectStatus').value, 10),   // Numeric ID
-        team: userTeam  // Add team from sessionStorage
+        team: userTeam,  // Add team from sessionStorage
+        deliveryHours: deliveryHoursValue === '' ? null : parseFloat(deliveryHoursValue)
     };
 
-    console.log('Form data to be sent:', formData);
+    console.log('📤 Form data to be sent:', formData);
+    console.log('📤 deliveryHours in formData:', formData.deliveryHours);
+    console.log('📤 JSON.stringify:', JSON.stringify(formData));
     
     try {
         // Prepare request

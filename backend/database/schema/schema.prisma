@@ -129,6 +129,7 @@ model Assignment {
   description  String?
   skillName    String?   @map("skill_name") @db.VarChar(100)
   team         String?   @db.VarChar(50)
+  module       String?   @db.VarChar(100)
   month        Int?
   year         Int?
   date         DateTime? @db.Date
@@ -146,6 +147,7 @@ model Assignment {
   @@index([skillName], map: "idx_assignments_skill_name")
   @@index([date], map: "idx_assignments_date")
   @@index([resourceId, date], map: "idx_assignments_resource_date")
+  @@index([module], map: "idx_assignments_module")
   @@map("assignments")
 }
 
@@ -163,4 +165,65 @@ model ConceptTask {
   @@index([projectId], map: "idx_concept_tasks_project")
   @@index([skillName], map: "idx_concept_tasks_skill_name")
   @@map("concept_tasks")
+}
+
+model JiraTask {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String    @db.VarChar(50)
+  title          String    @db.VarChar(255)
+  description    String?
+  type           String?   @db.VarChar(20)
+  priority       String    @db.VarChar(20)
+  startDate      DateTime? @map("start_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  status         Int       @map("status")
+  domain         Int       @map("domain")
+  team           String    @db.VarChar(50)
+  jiraIssueKey   String?   @map("jira_issue_key")
+  jiraUrl        String?   @map("jira_url")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@unique([code, team])
+  @@index([code], map: "idx_jira_tasks_code")
+  @@index([type], map: "idx_jira_tasks_type")
+  @@index([status], map: "idx_jira_tasks_status")
+  @@index([domain], map: "idx_jira_tasks_domain")
+  @@index([team], map: "idx_jira_tasks_team")
+  @@index([jiraIssueKey], map: "idx_jira_tasks_jira_key")
+  @@map("jira_tasks")
+}
+
+model AppConfig {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key       String   @unique @db.VarChar(100)
+  value     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([key], map: "idx_app_config_key")
+  @@map("app_config")
+}
+
+model TimeEntry {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resourceId      String    @map("resource_id") @db.Uuid
+  projectId       String    @map("project_id") @db.Uuid
+  taskTitle       String    @map("task_title") @db.VarChar(255)
+  taskDescription String?   @map("task_description") @db.Text
+  activity        String    @db.VarChar(100)
+  workDate        DateTime  @map("work_date") @db.Date
+  hours           Decimal   @db.Decimal(10, 2)
+  module          String?   @db.VarChar(100)
+  team            String    @db.VarChar(50)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([resourceId], map: "idx_time_entries_resource")
+  @@index([projectId], map: "idx_time_entries_project")
+  @@index([workDate], map: "idx_time_entries_work_date")
+  @@index([team], map: "idx_time_entries_team")
+  @@index([module], map: "idx_time_entries_module")
+  @@index([resourceId, workDate], map: "idx_time_entries_resource_date")
+  @@map("time_entries")
 }

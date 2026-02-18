@@ -202,7 +202,7 @@ export class CreateTaskModal {
         // Update modal title and icon
         const modalTitle = this.modalElement.querySelector('.modal-header h2 span');
         if (modalTitle) {
-            modalTitle.textContent = 'Editar Tarea';
+            modalTitle.textContent = 'Editar Trabajo';
         }
         
         // Update icon to "edit" icon for edit mode

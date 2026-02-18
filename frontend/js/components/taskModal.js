@@ -15,6 +15,7 @@ export class TaskModal {
         this.isInitialized = false;
         this.resourcesList = [];
         this.tasksList = [];
+        this.modulesList = [];
     }
 
     /**
@@ -147,7 +148,7 @@ export class TaskModal {
             console.log('Raw assignments loaded:', assignments.length);
             
             // Transform assignments to grid row format
-            // Group by resource + task + team
+            // Group by resource + task + team + module
             const rowsMap = new Map();
             
             assignments.forEach(assignment => {
@@ -162,15 +163,16 @@ export class TaskModal {
                     resourceName = resource?.name || `Unknown (${resourceId})`;
                 }
                 
-                // Create unique key for grouping
-                const key = `${resourceName}|${assignment.title}|${assignment.team || ''}`;
+                // Create unique key for grouping - include module
+                const key = `${resourceName}|${assignment.title}|${assignment.team || ''}|${assignment.module || ''}`;
                 
                 if (!rowsMap.has(key)) {
                     rowsMap.set(key, {
                         recurso: resourceName,
                         tarea: assignment.title,
                         detalleTarea: assignment.description || '',
-                        equipo: assignment.team || ''
+                        equipo: assignment.team || '',
+                        modulo: assignment.module || ''
                     });
                 }
                 
@@ -292,6 +294,54 @@ export class TaskModal {
     }
 
     /**
+     * Load modules from app_config based on user team
+     */
+    async loadModules() {
+        try {
+            const awsAccessKey = sessionStorage.getItem('aws_access_key');
+            const userTeam = sessionStorage.getItem('user_team');
+            
+            if (!awsAccessKey || !userTeam) {
+                console.warn('No authentication tokens found');
+                return [];
+            }
+
+            console.log(`📦 Loading modules for team: ${userTeam}`);
+
+            const response = await fetch(`${API_CONFIG.BASE_URL}/config?key=modules&team=${encodeURIComponent(userTeam)}`, {
+                headers: {
+                    'Authorization': awsAccessKey,
+                    'x-user-team': userTeam
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log('📦 Config response:', data);
+                
+                const configValue = data.data?.value || data.value;
+                
+                if (configValue && Array.isArray(configValue)) {
+                    console.log(`✅ Loaded ${configValue.length} modules for team ${userTeam}`);
+                    return configValue;
+                } else {
+                    console.log(`⚠️ No modules configured for team ${userTeam}`);
+                    return [];
+                }
+            } else if (response.status === 404) {
+                console.log(`ℹ️ No module configuration found for team ${userTeam}`);
+                return [];
+            } else {
+                console.error('Error loading config:', response.status);
+                return [];
+            }
+        } catch (error) {
+            console.error('Error loading modules:', error);
+            return [];
+        }
+    }
+
+    /**
      * Open modal for a specific project
      */
     async open(projectCode, projectName, existingTasks = [], startDate = null, endDate = null) {
@@ -311,9 +361,10 @@ export class TaskModal {
         document.getElementById('modal-project-title').textContent = 
             `Asignación de Recursos - ${projectCode} - ${projectName}${dateRange}`;
 
-        // Load resources and tasks before initializing grid
+        // Load resources, tasks, and modules before initializing grid
         this.resourcesList = await this.loadResources();
         this.tasksList = await this.loadTasks();
+        this.modulesList = await this.loadModules();
 
         // Load existing assignments for this project
         const loadedAssignments = await this.loadProjectAssignments();
@@ -549,7 +600,24 @@ export class TaskModal {
                     return colors[params.value] || {};
                 }
             },
-            // Add Total column after Equipo (before date columns)
+            // Add Módulo column after Actividad
+            {
+                headerName: 'Módulo',
+                field: 'modulo',
+                editable: true,
+                width: 140,
+                minWidth: 120,
+                pinned: 'left',
+                cellEditor: 'agSelectCellEditor',
+                cellEditorParams: {
+                    values: this.modulesList.length > 0 ? this.modulesList : []
+                },
+                cellStyle: {
+                    background: 'rgba(139, 92, 246, 0.05)',
+                    color: '#6d28d9'
+                }
+            },
+            // Add Total column after Módulo (before date columns)
             {
                 headerName: 'Total',
                 field: 'total',
@@ -883,6 +951,7 @@ export class TaskModal {
                         title: row.tarea || 'Sin título',
                         description: row.detalleTarea || '',
                         team: row.equipo || null,
+                        module: row.modulo || null,
                         date: dateToSend, // Force UTC interpretation
                         month: month, // Add month for KPI filtering
                         year: year, // Add year for KPI filtering
@@ -1093,11 +1162,26 @@ export class TaskModal {
                     const data = await response.json();
                     const assignments = data.data?.assignments || data.assignments || [];
                     
+                    console.log(`[validateCapacity] Current projectId: ${this.projectId} (type: ${typeof this.projectId})`);
+                    console.log(`[validateCapacity] Total assignments for resource ${resourceId}:`, assignments.length);
+                    
                     // Filter assignments for this date, excluding current project
                     const assignedHours = assignments
                         .filter(a => {
                             const assignmentDate = a.date ? a.date.toString().split('T')[0] : null;
-                            return assignmentDate === date && a.projectId !== this.projectId;
+                            const matchesDate = assignmentDate === date;
+                            
+                            // Handle both camelCase and snake_case projectId
+                            const assignmentProjectId = a.projectId || a.project_id;
+                            
+                            // Compare as strings to handle both string and number IDs
+                            const isDifferentProject = String(assignmentProjectId) !== String(this.projectId);
+                            
+                            if (matchesDate) {
+                                console.log(`[validateCapacity] Assignment on ${date}: projectId=${assignmentProjectId} (original: projectId=${a.projectId}, project_id=${a.project_id}), hours=${a.hours}, isDifferent=${isDifferentProject}`);
+                            }
+                            
+                            return matchesDate && isDifferentProject;
                         })
                         .reduce((sum, a) => sum + parseFloat(a.hours || 0), 0);
                     

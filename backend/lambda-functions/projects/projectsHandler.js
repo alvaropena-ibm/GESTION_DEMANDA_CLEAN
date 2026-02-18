@@ -260,8 +260,8 @@ async function createProject(body) {
     const insertSql = `
         INSERT INTO projects (
             code, title, description, type, priority,
-            start_date, end_date, status, domain, team
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            start_date, end_date, status, domain, team, delivery_hours
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
     `;
     
@@ -275,7 +275,8 @@ async function createProject(body) {
         data.endDate ? new Date(data.endDate) : null,
         data.status,
         data.domain,
-        data.team
+        data.team,
+        data.deliveryHours ? parseFloat(data.deliveryHours) : null
     ];
     
     const result = await query(insertSql, insertParams);
@@ -352,9 +353,9 @@ async function updateProject(projectId, body) {
         updates.push(`description = $${paramIndex++}`);
         params.push(data.description);
     }
-    if (data.type) {
+    if (data.type !== undefined) {
         updates.push(`type = $${paramIndex++}`);
-        params.push(data.type);
+        params.push(data.type && data.type.trim() !== '' ? data.type : null);
     }
     if (data.priority) {
         updates.push(`priority = $${paramIndex++}`);
@@ -379,6 +380,10 @@ async function updateProject(projectId, body) {
     if (data.team) {
         updates.push(`team = $${paramIndex++}`);
         params.push(data.team);
+    }
+    if (data.deliveryHours !== undefined) {
+        updates.push(`delivery_hours = $${paramIndex++}`);
+        params.push(data.deliveryHours ? parseFloat(data.deliveryHours) : null);
     }
     
     if (updates.length === 0) {

@@ -3,326 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Limpiar Caché - Gestión de Demanda</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Clear Cache - Gestión de Demanda</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
+            font-family: Arial, sans-serif;
             max-width: 600px;
-            width: 100%;
+            margin: 50px auto;
+            padding: 20px;
             text-align: center;
         }
-
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 2rem;
-        }
-
-        .icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
-        }
-
-        .status {
-            margin: 30px 0;
-            padding: 20px;
-            border-radius: 10px;
-            font-size: 1.1rem;
-        }
-
-        .status.loading {
-            background: #fff3cd;
-            color: #856404;
-            border: 2px solid #ffc107;
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 2px solid #28a745;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 2px solid #dc3545;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 30px;
-            background: #e9ecef;
-            border-radius: 15px;
-            overflow: hidden;
-            margin: 20px 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            width: 0%;
-            transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: #007bff;
             color: white;
+            padding: 10px 20px;
             border: none;
-            padding: 15px 40px;
-            border-radius: 25px;
-            font-size: 1.1rem;
+            border-radius: 4px;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            font-size: 16px;
             margin: 10px;
         }
-
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            background-color: #0056b3;
         }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .info-list {
-            text-align: left;
+        .info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
             margin: 20px 0;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .info-list li {
-            margin: 10px 0;
-            padding-left: 25px;
-            position: relative;
-        }
-
-        .info-list li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #28a745;
-            font-weight: bold;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="icon">🧹</div>
-        <h1>Limpiar Caché del Navegador</h1>
-        
-        <div id="status" class="status loading">
-            <div class="spinner"></div>
-            <p>Preparando limpieza de caché...</p>
-        </div>
-
-        <div class="progress-bar">
-            <div id="progress" class="progress-fill">0%</div>
-        </div>
-
-        <div class="info-list">
-            <h3>Esta herramienta limpiará:</h3>
-            <ul>
-                <li>Cache Storage (Service Workers)</li>
-                <li>LocalStorage</li>
-                <li>SessionStorage</li>
-                <li>IndexedDB</li>
-                <li>Cookies de la aplicación</li>
-            </ul>
-        </div>
-
-        <button id="clearBtn" class="btn" onclick="clearCache()">Limpiar Caché Ahora</button>
-        <button id="returnBtn" class="btn" onclick="returnToApp()" style="display: none;">Volver a la Aplicación</button>
+    <h1>Limpiar Caché del Navegador</h1>
+    <div class="info">
+        <p>Si los cambios no se reflejan en CloudFront, puede ser debido a la caché del navegador.</p>
+        <p>Haz clic en el botón para limpiar la caché y recargar la aplicación.</p>
     </div>
+    
+    <button class="btn" onclick="clearCacheAndReload()">Limpiar Caché y Recargar</button>
+    <button class="btn" onclick="goToApp()">Ir a la Aplicación</button>
 
     <script>
-        let progress = 0;
-
-        function updateProgress(percent, message) {
-            progress = percent;
-            const progressBar = document.getElementById('progress');
-            progressBar.style.width = percent + '%';
-            progressBar.textContent = percent + '%';
+        function clearCacheAndReload() {
+            // Clear localStorage
+            localStorage.clear();
             
-            const status = document.getElementById('status');
-            status.innerHTML = `<p>${message}</p>`;
-        }
-
-        async function clearCache() {
-            const clearBtn = document.getElementById('clearBtn');
-            const returnBtn = document.getElementById('returnBtn');
-            const status = document.getElementById('status');
+            // Clear sessionStorage
+            sessionStorage.clear();
             
-            clearBtn.disabled = true;
-            status.className = 'status loading';
-            
-            try {
-                // Step 1: Clear Cache Storage
-                updateProgress(10, '🗑️ Limpiando Cache Storage...');
-                if ('caches' in window) {
-                    const cacheNames = await caches.keys();
-                    await Promise.all(cacheNames.map(name => caches.delete(name)));
-                    console.log('✅ Cache Storage cleared');
-                }
-                
-                await sleep(500);
-                updateProgress(25, '🗑️ Limpiando LocalStorage...');
-                
-                // Step 2: Clear LocalStorage
-                localStorage.clear();
-                console.log('✅ LocalStorage cleared');
-                
-                await sleep(500);
-                updateProgress(40, '🗑️ Limpiando SessionStorage...');
-                
-                // Step 3: Clear SessionStorage
-                sessionStorage.clear();
-                console.log('✅ SessionStorage cleared');
-                
-                await sleep(500);
-                updateProgress(55, '🗑️ Limpiando IndexedDB...');
-                
-                // Step 4: Clear IndexedDB
-                if ('indexedDB' in window) {
-                    const databases = await indexedDB.databases();
-                    for (const db of databases) {
-                        indexedDB.deleteDatabase(db.name);
+            // Clear service worker cache if exists
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
                     }
-                    console.log('✅ IndexedDB cleared');
-                }
-                
-                await sleep(500);
-                updateProgress(70, '🗑️ Limpiando Cookies...');
-                
-                // Step 5: Clear Cookies
-                const cookies = document.cookie.split(";");
-                for (let cookie of cookies) {
-                    const eqPos = cookie.indexOf("=");
-                    const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-                    document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
-                }
-                console.log('✅ Cookies cleared');
-                
-                await sleep(500);
-                updateProgress(85, '🔄 Invalidando caché del navegador...');
-                
-                // Step 6: Force reload with cache bypass
-                // Add timestamp to force reload
-                const timestamp = new Date().getTime();
-                const url = new URL(window.location.href);
-                url.searchParams.set('_cache_bust', timestamp);
-                
-                await sleep(500);
-                updateProgress(100, '✅ ¡Caché limpiada exitosamente!');
-                
-                status.className = 'status success';
-                status.innerHTML = `
-                    <div style="font-size: 3rem; margin-bottom: 10px;">✅</div>
-                    <h2>¡Caché Limpiada Exitosamente!</h2>
-                    <p style="margin-top: 10px;">La aplicación se recargará en 3 segundos...</p>
-                `;
-                
-                returnBtn.style.display = 'inline-block';
-                
-                // Auto redirect after 3 seconds
-                setTimeout(() => {
-                    returnToApp();
-                }, 3000);
-                
-            } catch (error) {
-                console.error('Error clearing cache:', error);
-                status.className = 'status error';
-                status.innerHTML = `
-                    <div style="font-size: 3rem; margin-bottom: 10px;">❌</div>
-                    <h2>Error al Limpiar Caché</h2>
-                    <p style="margin-top: 10px;">${error.message}</p>
-                    <p style="margin-top: 10px; font-size: 0.9rem;">Por favor, intenta limpiar la caché manualmente desde las opciones del navegador.</p>
-                `;
-                clearBtn.disabled = false;
+                });
             }
-        }
-
-        function returnToApp() {
-            // Get the base URL (remove clear_cache.html)
-            const baseUrl = window.location.href.replace(/clear_cache\.html.*$/, '');
             
-            // Add cache busting parameter
+            // Clear cache storage
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                    }
+                });
+            }
+            
+            alert('Caché limpiada. La página se recargará con un timestamp para evitar caché.');
+            
+            // Reload with cache busting
             const timestamp = new Date().getTime();
-            const appUrl = `${baseUrl}index-modular.html?_cache_bust=${timestamp}`;
-            
-            // Force hard reload
-            window.location.replace(appUrl);
-            
-            // Fallback: force reload after navigation
-            setTimeout(() => {
-                window.location.reload(true);
-            }, 100);
+            window.location.href = 'index-modular.html?v=' + timestamp;
         }
-
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
+        
+        function goToApp() {
+            const timestamp = new Date().getTime();
+            window.location.href = 'index-modular.html?v=' + timestamp;
         }
-
-        // Auto-start on page load
-        window.addEventListener('load', () => {
-            updateProgress(0, 'Listo para limpiar la caché');
-            const status = document.getElementById('status');
-            status.className = 'status loading';
-            status.innerHTML = '<p>Haz clic en el botón para limpiar la caché</p>';
-        });
-
-        // Keyboard shortcut: Press Enter to clear cache
-        document.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const clearBtn = document.getElementById('clearBtn');
-                if (!clearBtn.disabled) {
-                    clearCache();
-                }
-            }
-        });
     </script>
 </body>
 </html>

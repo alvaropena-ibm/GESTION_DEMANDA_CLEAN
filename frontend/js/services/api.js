@@ -294,6 +294,164 @@ class ApiService {
         const data = await this.fetch('/skills');
         return data.data?.skills || data.skills || [];
     }
+
+    // ==================== JIRA TASKS ====================
+
+    /**
+     * Get all jira tasks
+     * @returns {Promise<Array>}
+     */
+    async getJiraTasks() {
+        const data = await this.fetch('/jira-tasks');
+        return data.data?.tasks || data.tasks || [];
+    }
+
+    /**
+     * Get jira task by ID
+     * @param {string|number} taskId
+     * @returns {Promise<Object>}
+     */
+    async getJiraTask(taskId) {
+        const data = await this.fetch(`/jira-tasks/${taskId}`);
+        return data.data || data;
+    }
+
+    /**
+     * Create jira task
+     * @param {Object} taskData
+     * @returns {Promise<Object>}
+     */
+    async createJiraTask(taskData) {
+        return await this.fetch('/jira-tasks', {
+            method: 'POST',
+            body: JSON.stringify(taskData)
+        });
+    }
+
+    /**
+     * Update jira task
+     * @param {string|number} taskId
+     * @param {Object} taskData
+     * @returns {Promise<Object>}
+     */
+    async updateJiraTask(taskId, taskData) {
+        return await this.fetch(`/jira-tasks/${taskId}`, {
+            method: 'PUT',
+            body: JSON.stringify(taskData)
+        });
+    }
+
+    /**
+     * Delete jira task
+     * @param {string|number} taskId
+     * @returns {Promise<Object>}
+     */
+    async deleteJiraTask(taskId) {
+        return await this.fetch(`/jira-tasks/${taskId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // ==================== APP CONFIG ====================
+
+    /**
+     * Get configuration value by key
+     * @param {string} key - Configuration key
+     * @param {string} team - Team name (optional, for team-specific configs)
+     * @returns {Promise<any>}
+     */
+    async getConfig(key, team = null) {
+        const params = new URLSearchParams({ key });
+        if (team) {
+            params.append('team', team);
+        }
+        const data = await this.fetch(`/config?${params.toString()}`);
+        return data.data || data;
+    }
+
+    /**
+     * Get task types for a specific team
+     * @param {string} team - Team name (SAP, SAPLCORP, Mulesoft, Darwin)
+     * @returns {Promise<Array<string>>}
+     */
+    async getTaskTypes(team) {
+        try {
+            const config = await this.getConfig('tasks_type', team);
+            if (config && config.value) {
+                // Parse JSON array from config value
+                const types = typeof config.value === 'string' 
+                    ? JSON.parse(config.value) 
+                    : config.value;
+                return Array.isArray(types) ? types : [];
+            }
+            // Fallback to default types if config not found
+            return ['Soporte_PAP', 'Tareas_Varias'];
+        } catch (error) {
+            console.error('Error loading task types:', error);
+            // Return default types on error
+            return ['Soporte_PAP', 'Tareas_Varias'];
+        }
+    }
+
+    // ==================== TIME ENTRIES (CLAIMS) ====================
+
+    /**
+     * Get all time entries with optional filters
+     * @param {Object} filters - Optional filters (projectId, resourceId, startDate, endDate, activity)
+     * @returns {Promise<Array>}
+     */
+    async getTimeEntries(filters = {}) {
+        const queryParams = new URLSearchParams(filters).toString();
+        const endpoint = queryParams ? `/time-entries?${queryParams}` : '/time-entries';
+        const data = await this.fetch(endpoint);
+        return data.data?.timeEntries || data.timeEntries || [];
+    }
+
+    /**
+     * Get time entry by ID
+     * @param {string|number} timeEntryId
+     * @returns {Promise<Object>}
+     */
+    async getTimeEntry(timeEntryId) {
+        const data = await this.fetch(`/time-entries/${timeEntryId}`);
+        return data.data?.timeEntry || data.timeEntry;
+    }
+
+    /**
+     * Create time entry (claim)
+     * @param {Object} timeEntryData - { projectId, resourceName, workDate, taskTitle, taskDescription, activity, hours, module }
+     * @returns {Promise<Object>}
+     */
+    async createTimeEntry(timeEntryData) {
+        return await this.fetch('/time-entries', {
+            method: 'POST',
+            body: JSON.stringify(timeEntryData)
+        });
+    }
+
+    /**
+     * Update time entry
+     * @param {string|number} timeEntryId
+     * @param {Object} timeEntryData
+     * @returns {Promise<Object>}
+     */
+    async updateTimeEntry(timeEntryId, timeEntryData) {
+        return await this.fetch(`/time-entries/${timeEntryId}`, {
+            method: 'PUT',
+            body: JSON.stringify(timeEntryData)
+        });
+    }
+
+    /**
+     * Delete time entry
+     * @param {string|number} timeEntryId
+     * @returns {Promise<Object>}
+     */
+    async deleteTimeEntry(timeEntryId) {
+        return await this.fetch(`/time-entries/${timeEntryId}`, {
+            method: 'DELETE'
+        });
+    }
 }
 
 // Create singleton instance

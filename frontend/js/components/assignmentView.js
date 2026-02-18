@@ -184,6 +184,20 @@ function createAssignmentModal(projectCode, projectTitle, assignments) {
     
     // Create modal HTML with single table
     const modalHTML = `
+        <style>
+            #assignmentModal #tasks-table-body tr {
+                height: auto !important;
+                min-height: 40px !important;
+                opacity: 1 !important;
+                display: table-row !important;
+            }
+            #assignmentModal #tasks-table-body td {
+                height: auto !important;
+                min-height: 40px !important;
+                padding: 12px !important;
+                display: table-cell !important;
+            }
+        </style>
         <div id="assignmentModal" class="modal-overlay" style="display: flex;">
             <div class="modal-container" style="max-width: 1400px; width: 95%; max-height: 90vh; overflow-y: auto;">
                 <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -467,19 +481,25 @@ function populateTasksTable(assignments) {
     groupedTasks.forEach(task => {
         const row = document.createElement('tr');
         
-        // Apply white background for all data rows (override any CSS hover effects)
+        // Apply white background and ensure visibility (override any CSS that might hide rows)
         row.style.backgroundColor = '#ffffff';
         row.style.setProperty('background-color', '#ffffff', 'important');
+        row.style.opacity = '1';
+        row.style.setProperty('opacity', '1', 'important');
+        row.style.height = 'auto';
+        row.style.minHeight = '40px';
+        row.style.setProperty('height', 'auto', 'important');
+        row.style.setProperty('min-height', '40px', 'important');
         
         // Get skill abbreviation for display
         const skillAbbr = getSkillAbbreviation(task.skillName);
         
         row.innerHTML = `
-            <td style="text-align: left; background-color: #ffffff !important;"><strong>${task.id}</strong></td>
-            <td style="text-align: left; background-color: #ffffff !important;">${task.title}</td>
-            <td style="text-align: left; background-color: #ffffff !important;">${task.description}</td>
-            <td style="text-align: left; background-color: #ffffff !important;" title="${task.skillName}">${skillAbbr}</td>
-            <td style="text-align: center; background-color: #ffffff !important;"><strong>${task.hours.toFixed(1)}</strong></td>
+            <td style="text-align: left; background-color: #ffffff !important; padding: 12px !important; height: auto !important; min-height: 40px !important;"><strong>${task.id}</strong></td>
+            <td style="text-align: left; background-color: #ffffff !important; padding: 12px !important; height: auto !important; min-height: 40px !important;">${task.title}</td>
+            <td style="text-align: left; background-color: #ffffff !important; padding: 12px !important; height: auto !important; min-height: 40px !important;">${task.description}</td>
+            <td style="text-align: left; background-color: #ffffff !important; padding: 12px !important; height: auto !important; min-height: 40px !important;" title="${task.skillName}">${skillAbbr}</td>
+            <td style="text-align: center; background-color: #ffffff !important; padding: 12px !important; height: auto !important; min-height: 40px !important;"><strong>${task.hours.toFixed(1)}</strong></td>
             <td style="text-align: center;">
                 <span class="action-icon" data-action="edit" data-task-ids="${task.allIds.join(',')}" title="Editar">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">

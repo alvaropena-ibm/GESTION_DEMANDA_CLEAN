@@ -259,9 +259,9 @@ async function createAssignment(body) {
     // Insert assignment
     const insertSql = `
         INSERT INTO assignments (
-            project_id, resource_id, title, description, skill_name, team,
+            project_id, resource_id, title, description, skill_name, team, module,
             date, month, year, hours
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
     `;
     
@@ -272,6 +272,7 @@ async function createAssignment(body) {
         data.description || null,
         data.skillName || null,
         data.team || null,
+        data.module || null,
         dateObj,
         month,
         year,
@@ -338,6 +339,10 @@ async function updateAssignment(assignmentId, body) {
     if (data.skillName !== undefined) {
         updates.push(`skill_name = $${paramIndex++}`);
         params.push(data.skillName);
+    }
+    if (data.module !== undefined) {
+        updates.push(`module = $${paramIndex++}`);
+        params.push(data.module);
     }
     if (data.month) {
         updates.push(`month = $${paramIndex++}`);

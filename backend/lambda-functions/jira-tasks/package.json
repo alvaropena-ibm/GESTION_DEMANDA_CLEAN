@@ -1,0 +1,20 @@
+{
+  "name": "jira-tasks-handler",
+  "version": "1.0.0",
+  "description": "Lambda handler for SCOM Jira tasks CRUD operations",
+  "main": "jiraTasksHandler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "lambda",
+    "jira",
+    "tasks",
+    "scom"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
+}

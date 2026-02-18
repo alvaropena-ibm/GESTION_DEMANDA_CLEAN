@@ -416,3 +416,83 @@ table tr:hover {
 #drill-down-content {
     margin-top: var(--spacing-sm);
 }
+
+/* AG Grid Pagination Styles - Matching project pagination style */
+.ag-theme-alpine .ag-paging-panel {
+    border-top: 1px solid var(--border-medium);
+    background: transparent;
+    padding: 1rem;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.ag-theme-alpine .ag-paging-button {
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--border-medium);
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all var(--transition-normal);
+    min-width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ag-theme-alpine .ag-paging-button:hover:not(.ag-disabled) {
+    background: rgba(49, 151, 149, 0.1);
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.ag-theme-alpine .ag-paging-button.ag-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: rgba(0, 0, 0, 0.05);
+    border-color: var(--border-light);
+}
+
+.ag-theme-alpine .ag-paging-page-summary-panel {
+    color: var(--text-primary);
+    font-weight: 500;
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+}
+
+.ag-theme-alpine .ag-paging-row-summary-panel {
+    display: none;
+}
+
+/* Page size selector */
+.ag-theme-alpine .ag-paging-page-size {
+    margin: 0 0.5rem;
+}
+
+.ag-theme-alpine .ag-paging-page-size select {
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--border-medium);
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.ag-theme-alpine .ag-paging-page-size select:hover {
+    background: rgba(49, 151, 149, 0.1);
+    border-color: var(--primary-color);
+}
+
+.ag-theme-alpine .ag-paging-page-size select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(49, 151, 149, 0.1);
+}

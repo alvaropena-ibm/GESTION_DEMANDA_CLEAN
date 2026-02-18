@@ -11,12 +11,42 @@ export class JiraModal {
         this.modal = null;
         this.selectedProjects = [];
         this.maxImportBatch = 10; // Default value, will be loaded from config
+        this.mode = 'projects'; // 'projects' or 'tasks'
+        this.taskTypes = []; // Will be loaded from config
     }
 
     async init() {
         await this.loadMaxImportBatchConfig();
+        await this.loadTaskTypes();
         this.createModal();
         console.log('Jira Modal initialized');
+    }
+
+    /**
+     * Load task types configuration from API
+     */
+    async loadTaskTypes() {
+        try {
+            const userTeam = sessionStorage.getItem('user_team');
+            
+            if (!userTeam) {
+                console.warn('No user team found, using default task types');
+                this.taskTypes = ['Soporte_PAP', 'Tareas_Varias'];
+                return;
+            }
+            
+            // Import apiService
+            const { default: apiService } = await import('../services/api.js');
+            
+            // Load task types for the user's team
+            this.taskTypes = await apiService.getTaskTypes(userTeam);
+            
+            console.log(`✅ Loaded task types for team ${userTeam}:`, this.taskTypes);
+        } catch (error) {
+            console.error('Error loading task types:', error);
+            // Keep default values
+            this.taskTypes = ['Soporte_PAP', 'Tareas_Varias'];
+        }
     }
 
     /**
@@ -185,8 +215,10 @@ export class JiraModal {
         this.modal = document.getElementById('jira-modal');
     }
 
-    open() {
-        console.log('JiraModal.open() called - usando configuración automática');
+    open(mode = 'projects') {
+        this.mode = mode; // 'projects' o 'tasks'
+        console.log(`JiraModal.open() called - mode: ${this.mode}`);
+        
         if (this.modal) {
             console.log('Modal element found, showing...');
             this.modal.style.display = 'flex';
@@ -245,10 +277,14 @@ export class JiraModal {
         document.getElementById('jira-import-status').textContent = 'Descargando issues desde Jira...';
 
         try {
-            // El backend usa la configuración del equipo automáticamente
-            const listUrl = `${API_CONFIG.BASE_URL}/jira/issues`;
-            
-            console.log(`Listando issues desde Jira para el equipo: ${userTeam}`);
+            // Si el modo es 'tasks', cargar por defecto el proyecto SCOM
+            let listUrl = `${API_CONFIG.BASE_URL}/jira/issues`;
+            if (this.mode === 'tasks') {
+                listUrl += '?projectKey=SCOM';
+                console.log(`Listando issues de SCOM para modo tasks`);
+            } else {
+                console.log(`Listando issues desde Jira para el equipo: ${userTeam}`);
+            }
 
             const response = await fetch(listUrl, {
                 method: 'GET',
@@ -750,7 +786,143 @@ export class JiraModal {
         document.getElementById('jira-import-status').textContent = `Importando ${issueKeys.length} issue(s) seleccionado(s)...`;
 
         try {
-            // El backend usa la configuración del equipo automáticamente
+            const awsAccessKey = sessionStorage.getItem('aws_access_key');
+            
+            // Determinar endpoint y formato según el modo
+            if (this.mode === 'tasks') {
+                // Modo tasks: importar una por una con datos completos
+                console.log('Modo tasks: guardando en jira_tasks table');
+                
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (const key of issueKeys) {
+                    const issue = this.allIssues.find(i => i.key === key);
+                    if (!issue) continue;
+                    
+                    // Mapear status de texto a integer - ESTADOS DE TAREAS (14 estados)
+                    const taskStatusMap = {
+                        'To Do': 1,
+                        'Por Hacer': 1,
+                        'TAREAS POR HACER': 1,
+                        'Conceptualización': 2,
+                        'CONCEPTUALIZACIÓN': 2,
+                        'Cierre Requisitos': 3,
+                        'CIERRE REQUISITOS': 3,
+                        'En Valoración': 4,
+                        'EN VALORACIÓN': 4,
+                        'Vale Pendiente Aprobación': 5,
+                        'Vale Pdte. Aprob': 5,
+                        'VALE PDTE. APROB': 5,
+                        'En SD': 6,
+                        'EN SD': 6,
+                        'SD Pendiente Aprobación': 7,
+                        'SD Pdte Aprob': 7,
+                        'SD PDTE APROB': 7,
+                        'In Progress': 8,
+                        'En Desarrollo': 8,
+                        'EN DESARROLLO': 8,
+                        'Desarrollo': 8,
+                        'En Validación SSII': 9,
+                        'EN VALIDACIÓN SSII': 9,
+                        'UAT': 10,
+                        'Ready to Promote': 11,
+                        'READY TO PROMOTE': 11,
+                        'Done': 12,
+                        'Finalizado': 12,
+                        'FINALIZADO': 12,
+                        'Cancelled': 13,
+                        'Cancelado': 13,
+                        'CANCELADO': 13,
+                        'Waiting': 14,
+                        'En Espera': 14,
+                        'WAITING': 14
+                    };
+                    
+                    // Mapear domain de texto a integer
+                    const domainMap = {
+                        'Ventas | Contratación y SW': 1,
+                        'Ciclo de Vida y Producto': 2,
+                        'Facturación y Cobro': 3,
+                        'Atención': 4,
+                        'Operación de Sistemas y Ciberseguridad': 5,
+                        'Datos': 6,
+                        'Portabilidad': 7,
+                        'Integración': 8,
+                        'Sin dominio': 0,
+                        'Ninguno': 0
+                    };
+                    
+                    const statusInt = taskStatusMap[issue.status] || 8; // Default: EN DESARROLLO (ID 8 para tareas)
+                    const domainInt = domainMap[issue.dominioPrincipal] || 0; // Default: Ninguno
+                    
+                    // Mapear tipo usando configuración dinámica
+                    // Por defecto, usar el primer tipo configurado
+                    let taskType = this.taskTypes[0] || 'Soporte_PAP';
+                    
+                    // Si hay lógica de mapeo basada en campos de Jira, aplicarla aquí
+                    // Por ejemplo, si esProyecto === 'Si', usar el segundo tipo
+                    if (issue.esProyecto === 'Si' && this.taskTypes.length > 1) {
+                        taskType = this.taskTypes[1];
+                    }
+                    
+                    const taskData = {
+                        code: issue.key,
+                        title: issue.summary,
+                        description: issue.description || '',
+                        type: taskType,
+                        priority: issue.priority?.name || 'Medium',
+                        status: statusInt,
+                        domain: domainInt,
+                        jiraIssueKey: issue.key,
+                        jiraUrl: `https://naturgy-adn.atlassian.net/browse/${issue.key}`,
+                        fixVersions: issue.fixVersions || []
+                    };
+                    
+                    try {
+                        const response = await fetch(`${API_CONFIG.BASE_URL}/jira-tasks`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': awsAccessKey,
+                                'x-user-team': userTeam
+                            },
+                            body: JSON.stringify(taskData)
+                        });
+                        
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            errorCount++;
+                            const errorText = await response.text();
+                            console.error(`Error importing ${taskData.jiraKey}:`, errorText);
+                        }
+                    } catch (error) {
+                        errorCount++;
+                        console.error(`Error importing ${taskData.jiraKey}:`, error);
+                    }
+                }
+                
+                console.log(`Importación completada: ${successCount} exitosas, ${errorCount} errores`);
+                
+                if (errorCount > 0 && successCount === 0) {
+                    throw new Error(`No se pudo importar ninguna tarea. ${errorCount} errores.`);
+                } else if (errorCount > 0) {
+                    alert(`Importación completada con errores:\n${successCount} tareas importadas\n${errorCount} errores`);
+                }
+                
+                // Cerrar modal y recargar
+                this.close();
+                sessionStorage.setItem('activate_tasks_tab', 'true');
+                window.location.reload();
+                return;
+            }
+            
+            // Modo projects: comportamiento original
+            const endpoint = `${API_CONFIG.BASE_URL}/jira/import`;
+            const tabToActivate = 'projects-tab';
+            console.log('Modo projects: guardando en projects table');
+
             const requestBody = {
                 team: userTeam,
                 issueKeys: issueKeys
@@ -758,10 +930,12 @@ export class JiraModal {
 
             console.log('Importando issues seleccionados:', requestBody);
 
-            const response = await fetch(`${API_CONFIG.BASE_URL}/jira/import`, {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': awsAccessKey,
+                    'x-user-team': userTeam
                 },
                 body: JSON.stringify(requestBody)
             });
@@ -772,11 +946,12 @@ export class JiraModal {
                 throw new Error(result.error || 'Error importando desde Jira');
             }
 
-            // Cerrar modal y recargar página, activando la pestaña de proyectos
+            // Cerrar modal y recargar página, activando la pestaña correspondiente
             this.close();
             
-            // Guardar en sessionStorage que debe activarse la pestaña de proyectos
-            sessionStorage.setItem('activate_projects_tab', 'true');
+            // Guardar en sessionStorage qué pestaña activar
+            sessionStorage.setItem('activate_projects_tab', tabToActivate === 'projects-tab' ? 'true' : 'false');
+            sessionStorage.setItem('activate_tasks_tab', tabToActivate === 'tasks-tab' ? 'true' : 'false');
             
             window.location.reload();
         } catch (error) {

@@ -48,6 +48,46 @@ export function ftesToHours(ftes) {
 }
 
 /**
+ * Get status text from status ID
+ * @param {number} statusId - Status ID
+ * @param {string} type - Type of status ('project' or 'task')
+ * @returns {string} Status text
+ */
+export function getStatusText(statusId, type = 'project') {
+    // Map status IDs to text for PROJECTS
+    const projectStatusMap = {
+        1: 'Conceptualización',
+        2: 'Análisis',
+        3: 'Diseño',
+        4: 'Desarrollo',
+        5: 'Validación',
+        6: 'Producción',
+        7: 'Cerrado'
+    };
+    
+    // Map status IDs to text for TASKS
+    const taskStatusMap = {
+        1: 'TAREAS POR HACER',
+        2: 'CONCEPTUALIZACIÓN',
+        3: 'CIERRE REQUISITOS',
+        4: 'EN VALORACIÓN',
+        5: 'VALE PDTE. APROB',
+        6: 'EN SD',
+        7: 'SD PDTE APROB',
+        8: 'EN DESARROLLO',
+        9: 'EN VALIDACIÓN SSII',
+        10: 'UAT',
+        11: 'READY TO PROMOTE',
+        12: 'FINALIZADO',
+        13: 'CANCELADO',
+        14: 'WAITING'
+    };
+    
+    const statusMap = type === 'task' ? taskStatusMap : projectStatusMap;
+    return statusMap[statusId] || 'Desconocido';
+}
+
+/**
  * Get priority class name
  */
 export function getPriorityClass(priority) {
@@ -136,44 +176,6 @@ export function getStatusClass(status) {
     return stringStatusMap[status] || 'desarrollo';
 }
 
-/**
- * Get status display text
- * Accepts both numeric IDs and string keys
- */
-export function getStatusText(status) {
-    // Numeric mapping (from database - matches jiraHandler.ts)
-    const numericStatusMap = {
-        1: 'Idea',
-        2: 'Concepto',
-        3: 'Viabilidad (TEC-ECO)',
-        4: 'Diseño Detallado',
-        5: 'Desarrollo',
-        6: 'Implantado',
-        7: 'Finalizado',
-        8: 'On Hold',
-        9: 'Cancelado'
-    };
-    
-    // String mapping (legacy)
-    const stringStatusMap = {
-        'idea': 'Idea',
-        'conceptualizacion': 'Conceptualización',
-        'concepto': 'Concepto',
-        'diseno-detallado': 'Diseño Detallado',
-        'viabilidad': 'Viabilidad',
-        'desarrollo': 'Desarrollo',
-        'implantado': 'Implantado',
-        'finalizado': 'Finalizado',
-        'on-hold': 'On Hold',
-        'cancelado': 'Cancelado'
-    };
-    
-    // Try numeric first, then string
-    if (typeof status === 'number') {
-        return numericStatusMap[status] || 'Desarrollo';
-    }
-    return stringStatusMap[status] || 'Desarrollo';
-}
 
 /**
  * Get domain display text

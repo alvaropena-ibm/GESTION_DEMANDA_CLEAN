@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Tabla de Tareas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        #test-modal {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        /* CSS CRÍTICO PARA LAS FILAS */
+        #tasks-table-body tr {
+            height: auto !important;
+            min-height: 40px !important;
+            opacity: 1 !important;
+            display: table-row !important;
+        }
+        
+        #tasks-table-body td {
+            height: auto !important;
+            min-height: 40px !important;
+            padding: 12px !important;
+            display: table-cell !important;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: #e2e8f0;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div id="test-modal">
+        <h2>Test - Tabla de Tareas Conceptualización</h2>
+        <p>Si ves 4 filas con contenido abajo, el CSS funciona correctamente.</p>
+        
+        <table id="tasks-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Título</th>
+                    <th>Descripción</th>
+                    <th>Skills</th>
+                    <th>Horas</th>
+                </tr>
+            </thead>
+            <tbody id="tasks-table-body">
+                <tr style="background-color: rgb(255, 255, 255) !important; opacity: 1 !important; height: auto !important; min-height: 40px !important;">
+                    <td style="padding: 12px !important;"><strong>UUID-1</strong></td>
+                    <td style="padding: 12px !important;">Tarea 1</td>
+                    <td style="padding: 12px !important;">Descripción de la tarea 1</td>
+                    <td style="padding: 12px !important;">Frontend</td>
+                    <td style="padding: 12px !important;"><strong>10.0</strong></td>
+                </tr>
+                <tr style="background-color: rgb(255, 255, 255) !important; opacity: 1 !important; height: auto !important; min-height: 40px !important;">
+                    <td style="padding: 12px !important;"><strong>UUID-2</strong></td>
+                    <td style="padding: 12px !important;">Tarea 2</td>
+                    <td style="padding: 12px !important;">Descripción de la tarea 2</td>
+                    <td style="padding: 12px !important;">Backend</td>
+                    <td style="padding: 12px !important;"><strong>15.0</strong></td>
+                </tr>
+                <tr style="background-color: rgb(255, 255, 255) !important; opacity: 1 !important; height: auto !important; min-height: 40px !important;">
+                    <td style="padding: 12px !important;"><strong>UUID-3</strong></td>
+                    <td style="padding: 12px !important;">Tarea 3</td>
+                    <td style="padding: 12px !important;">Descripción de la tarea 3</td>
+                    <td style="padding: 12px !important;">QA</td>
+                    <td style="padding: 12px !important;"><strong>8.0</strong></td>
+                </tr>
+                <tr style="background-color: rgb(255, 255, 255) !important; opacity: 1 !important; height: auto !important; min-height: 40px !important;">
+                    <td style="padding: 12px !important;"><strong>UUID-4</strong></td>
+                    <td style="padding: 12px !important;">Tarea 4</td>
+                    <td style="padding: 12px !important;">Descripción de la tarea 4</td>
+                    <td style="padding: 12px !important;">Análisis</td>
+                    <td style="padding: 12px !important;"><strong>12.0</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 4px;">
+            <strong>✅ Si ves las 4 filas arriba:</strong> El CSS funciona correctamente.<br>
+            <strong>❌ Si NO ves las filas:</strong> Hay un problema más profundo con el navegador o el CSS de tables.css está sobrescribiendo todo.
+        </div>
+    </div>
+</body>
+</html>

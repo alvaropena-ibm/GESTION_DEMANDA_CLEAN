@@ -1,8 +1,9 @@
-// Main Application Entry Point
+ // Main Application Entry Point
 
 import appState from './state/AppState.js';
 import apiService from './services/api.js';
 import projectsManager from './managers/ProjectsManager.js';
+import tasksManager from './managers/TasksManager.js';
 import resourcesManager from './managers/ResourcesManager.js';
 import assignmentsManager from './managers/AssignmentsManager.js';
 import { initializeTabs } from './components/tabs.js';
@@ -26,8 +27,11 @@ import { ConceptTasksModal } from './components/conceptTasksModal.js';
 import { CreateTaskModal } from './components/createTaskModal.js';
 import { ResourceCapacityModal } from './components/resourceCapacityModal.js';
 import { JiraModal } from './components/jiraModal.js';
+import jiraTasksModal from './components/jiraTasksModal.js';
+import { initializeClaimModal } from './components/claimModal.js';
 import { openAssignmentView } from './components/assignmentView.js';
 import { initializeResourceCapacity } from './components/resourceCapacity.js';
+import { initializeCalendarView, loadCalendarView } from './components/calendarView.js';
 import { projectMetadata, projectSkillBreakdown, monthKeys, API_CONFIG } from './config/data.js';
 import { 
     getPriorityText, 
@@ -86,6 +90,8 @@ async function initializeApp() {
     initProjectModal();
     initResourceModal();
     initializeResourceCapacity();
+    initializeClaimModal();
+    initializeCalendarView();
     
     // Initialize modals
     taskModal = new TaskModal();
@@ -103,12 +109,16 @@ async function initializeApp() {
     jiraModal = new JiraModal();
     jiraModal.init();
     
+    // Initialize jiraTasksModal
+    jiraTasksModal.init();
+    
     // Make modals globally available
     window.conceptTasksModal = conceptTasksModal;
     window.createTaskModal = createTaskModal;
     window.capacityModal = capacityModal;
     window.jiraModal = jiraModal;
-    console.log('Modals initialized:', { conceptTasksModal: !!window.conceptTasksModal, createTaskModal: !!window.createTaskModal, capacityModal: !!window.capacityModal, jiraModal: !!window.jiraModal });
+    window.jiraTasksModal = jiraTasksModal;
+    console.log('Modals initialized:', { conceptTasksModal: !!window.conceptTasksModal, createTaskModal: !!window.createTaskModal, capacityModal: !!window.capacityModal, jiraModal: !!window.jiraModal, jiraTasksModal: !!window.jiraTasksModal });
     
     // Load all data once at startup
     await loadInitialData();
@@ -271,12 +281,50 @@ function initializeEventListeners() {
         });
     }
     
-    // Tab change listener - reload projects when Projects tab is opened
+    // ==================== GESTIÓN DE TAREAS BUTTONS ====================
+    
+    // Add task project button
+    const addTaskProjectBtn = document.getElementById('add-task-project-btn');
+    if (addTaskProjectBtn) {
+        addTaskProjectBtn.addEventListener('click', function() {
+            console.log('Add task project button clicked!');
+            openCreateProjectModal(); // Opens the project modal (same as projects tab)
+        });
+    }
+    
+    // Import task from Jira button (SCOM source)
+    const importTaskJiraBtn = document.getElementById('import-task-jira-btn');
+    if (importTaskJiraBtn) {
+        importTaskJiraBtn.addEventListener('click', function() {
+            console.log('Import task from Jira button clicked!');
+            importFromJiraForTasks();
+        });
+    }
+    
+    // Task project search
+    const taskProjectSearch = document.getElementById('task-project-search');
+    if (taskProjectSearch) {
+        taskProjectSearch.addEventListener('keyup', function() {
+            filterTasks(this.value);
+        });
+    }
+    
+    // Tab change listener - reload data when tabs are opened
     document.addEventListener('click', function(e) {
         const tabButton = e.target.closest('.tab-button');
-        if (tabButton && tabButton.getAttribute('data-tab') === 'projects') {
-            console.log('Projects tab opened, reloading projects...');
-            loadProjectsFromAPI();
+        if (tabButton) {
+            const tabName = tabButton.getAttribute('data-tab');
+            
+            if (tabName === 'projects-tab') {
+                console.log('Projects tab opened, reloading projects...');
+                loadProjectsFromAPI();
+            } else if (tabName === 'tasks-tab') {
+                console.log('Tasks tab opened, reloading tasks...');
+                loadTasksFromAPI();
+            } else if (tabName === 'calendar-tab') {
+                console.log('Calendar tab opened, loading calendar view...');
+                loadCalendarView();
+            }
         }
     });
     
@@ -301,7 +349,9 @@ function initializeEventListeners() {
         if (actionIcon) {
             const action = actionIcon.getAttribute('data-action');
             const projectId = actionIcon.getAttribute('data-project');
+            const taskId = actionIcon.getAttribute('data-task');
             
+            // Handle project actions
             if (action && projectId) {
                 if (action === 'edit') {
                     editProject(projectId);
@@ -313,6 +363,15 @@ function initializeEventListeners() {
                     deleteProject(projectId);
                 } else if (action === 'sync') {
                     syncWithJira(projectId);
+                }
+            }
+            
+            // Handle task actions (from Gestión de Trabajo tab)
+            if (action && taskId) {
+                if (action === 'edit') {
+                    editTask(taskId);
+                } else if (action === 'delete') {
+                    deleteTask(taskId);
                 }
             }
         }
@@ -701,6 +760,11 @@ let currentPage = 1;
 const projectsPerPage = 10;
 let allProjects = []; // Keep for backward compatibility, but use appState as source of truth
 
+// Tasks pagination state
+let currentTasksPage = 1;
+const tasksPerPage = 10;
+let allTasks = [];
+
 /**
  * Update projects table with new data from API
  * Called after CRUD operations to refresh the table
@@ -817,6 +881,10 @@ async function updateProjectsTable(projects) {
         const estimatedHours = estimatedHoursMap.get(project.id) || 0;
         const estimatedHoursDisplay = estimatedHours > 0 ? formatNumber(Math.round(estimatedHours)) : '-';
         
+        // Get delivery hours
+        const deliveryHours = project.deliveryHours || project.delivery_hours || 0;
+        const deliveryHoursDisplay = deliveryHours > 0 ? formatNumber(Math.round(deliveryHours)) : '-';
+        
         // Check if this is an ABSENCES project
         const isAbsencesProject = project.code.startsWith('ABSENCES-');
         
@@ -831,8 +899,9 @@ async function updateProjectsTable(projects) {
             <td style="text-align: left;">${project.title}</td>
             <td style="text-align: left;">${truncateText(project.description || '', 50)}</td>
             <td style="text-align: left;">${isAbsencesProject ? '-' : domainText}</td>
-            <td style="text-align: center;"><strong>${committedHoursDisplay}</strong></td>
             <td style="text-align: center;"><strong>${estimatedHoursDisplay}</strong></td>
+            <td style="text-align: center;"><strong>${deliveryHoursDisplay}</strong></td>
+            <td style="text-align: center;"><strong>${committedHoursDisplay}</strong></td>
             <td style="text-align: center;">${isAbsencesProject ? '-' : startDate}</td>
             <td style="text-align: center;">${isAbsencesProject ? '-' : endDate}</td>
             <td style="text-align: center;">
@@ -1501,6 +1570,561 @@ async function updateChartsWithFilteredData(assignments, period) {
     // Re-initialize charts with filtered data
     await initializeAllCharts();
 }
+
+/**
+ * Filter tasks in Gestión de Tareas table
+ */
+function filterTasks(searchTerm) {
+    const tableBody = document.getElementById('tasks-table-body');
+    if (!tableBody) return;
+    
+    const rows = tableBody.getElementsByTagName('tr');
+    const term = searchTerm.toLowerCase();
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const cells = row.getElementsByTagName('td');
+        let found = false;
+        
+        if (cells.length > 0) {
+            const id = cells[0].textContent.toLowerCase();
+            const title = cells[1].textContent.toLowerCase();
+            const description = cells[2] ? cells[2].textContent.toLowerCase() : '';
+            
+            if (id.includes(term) || title.includes(term) || description.includes(term)) {
+                found = true;
+            }
+        }
+        
+        row.style.display = found ? '' : 'none';
+    }
+}
+
+/**
+ * Import from Jira for Tasks (SCOM source)
+ * Uses jiraModal in 'tasks' mode which saves to jira_tasks table
+ */
+function importFromJiraForTasks() {
+    console.log('=== importFromJiraForTasks function called ===');
+    console.log('window.jiraModal:', window.jiraModal);
+    
+    if (window.jiraModal) {
+        console.log('Opening jiraModal in tasks mode (SCOM)...');
+        window.jiraModal.open('tasks'); // Pasar 'tasks' como modo
+    } else {
+        console.error('Jira modal not initialized');
+        alert('Error: Modal de Jira no está inicializado. Revisa la consola para más detalles.');
+    }
+}
+
+/**
+ * Load tasks from API and update tasks table
+ */
+async function loadTasksFromAPI() {
+    try {
+        console.log('Loading tasks from jira_tasks table...');
+        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        const userTeam = sessionStorage.getItem('user_team');
+        
+        if (!awsAccessKey || !userTeam) {
+            console.warn('No credentials for loading tasks');
+            return;
+        }
+        
+        const response = await fetch(`${API_CONFIG.BASE_URL}/jira-tasks`, {
+            headers: {
+                'Authorization': awsAccessKey,
+                'x-user-team': userTeam
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error loading tasks');
+        }
+        
+        const result = await response.json();
+        const tasks = result.data?.tasks || result.tasks || [];
+        
+        console.log(`Loaded ${tasks.length} tasks from jira_tasks table`);
+        
+        // Update tasks table
+        updateTasksTable(tasks);
+        
+        // Update tasks KPIs and charts
+        updateTasksKPIsAndCharts(tasks);
+        
+    } catch (error) {
+        console.error('Error loading tasks:', error);
+    }
+}
+
+/**
+ * Update Tasks KPIs and Charts with data from jira_tasks
+ */
+function updateTasksKPIsAndCharts(tasks) {
+    if (!tasks || tasks.length === 0) {
+        // Set all to 0 or '-'
+        const totalCountEl = document.getElementById('tasks-total-count');
+        const evolutivosCountEl = document.getElementById('tasks-evolutivos-count');
+        const proyectosCountEl = document.getElementById('tasks-proyectos-count');
+        
+        if (totalCountEl) totalCountEl.textContent = '0';
+        if (evolutivosCountEl) evolutivosCountEl.textContent = '0';
+        if (proyectosCountEl) proyectosCountEl.textContent = '0';
+        
+        return;
+    }
+    
+    // Calculate totals
+    let totalCount = tasks.length;
+    let evolutivosCount = 0;
+    let proyectosCount = 0;
+    
+    // Count by status
+    const statusCounts = {};
+    // Count by domain
+    const domainCounts = {};
+    // Count by priority
+    const priorityCounts = {};
+    
+    tasks.forEach(task => {
+        // Count by type
+        if (task.type === 'Evolutivo') {
+            evolutivosCount++;
+        } else if (task.type === 'Proyecto') {
+            proyectosCount++;
+        }
+        
+        // Count by status - usar 'task' para estados de tareas
+        const statusText = getStatusText(task.status, 'task');
+        statusCounts[statusText] = (statusCounts[statusText] || 0) + 1;
+        
+        // Count by domain
+        const domainText = getDomainText(task.domain);
+        domainCounts[domainText] = (domainCounts[domainText] || 0) + 1;
+        
+        // Count by priority
+        const priorityText = task.priority || 'Sin prioridad';
+        priorityCounts[priorityText] = (priorityCounts[priorityText] || 0) + 1;
+    });
+    
+    // Update KPI card
+    const totalCountEl = document.getElementById('tasks-total-count');
+    const evolutivosCountEl = document.getElementById('tasks-evolutivos-count');
+    const proyectosCountEl = document.getElementById('tasks-proyectos-count');
+    
+    if (totalCountEl) totalCountEl.textContent = totalCount;
+    if (evolutivosCountEl) evolutivosCountEl.textContent = evolutivosCount;
+    if (proyectosCountEl) proyectosCountEl.textContent = proyectosCount;
+    
+    // Update charts
+    updateTasksCharts(statusCounts, domainCounts, priorityCounts);
+    
+    console.log('Tasks KPIs and charts updated:', {
+        total: totalCount,
+        evolutivos: evolutivosCount,
+        proyectos: proyectosCount,
+        statusCounts,
+        domainCounts,
+        priorityCounts
+    });
+}
+
+/**
+ * Update Tasks Charts (Status, Domain, Priority)
+ */
+function updateTasksCharts(statusCounts, domainCounts, priorityCounts) {
+    // Destroy existing charts if they exist
+    if (window.tasksStatusChart) {
+        window.tasksStatusChart.destroy();
+    }
+    if (window.tasksDomainChart) {
+        window.tasksDomainChart.destroy();
+    }
+    if (window.tasksPriorityChart) {
+        window.tasksPriorityChart.destroy();
+    }
+    
+    // Chart 1: By Status
+    const statusCanvas = document.getElementById('tasks-by-status-chart');
+    if (statusCanvas) {
+        const statusLabels = Object.keys(statusCounts);
+        const statusData = Object.values(statusCounts);
+        
+        window.tasksStatusChart = new Chart(statusCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: statusLabels,
+                datasets: [{
+                    data: statusData,
+                    backgroundColor: [
+                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', 
+                        '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 10 } }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Chart 2: By Domain
+    const domainCanvas = document.getElementById('tasks-by-domain-chart');
+    if (domainCanvas) {
+        const domainLabels = Object.keys(domainCounts);
+        const domainData = Object.values(domainCounts);
+        
+        window.tasksDomainChart = new Chart(domainCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: domainLabels,
+                datasets: [{
+                    data: domainData,
+                    backgroundColor: [
+                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', 
+                        '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 10 } }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Chart 3: By Priority
+    const priorityCanvas = document.getElementById('tasks-by-priority-chart');
+    if (priorityCanvas) {
+        const priorityLabels = Object.keys(priorityCounts);
+        const priorityData = Object.values(priorityCounts);
+        
+        window.tasksPriorityChart = new Chart(priorityCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: priorityLabels,
+                datasets: [{
+                    data: priorityData,
+                    backgroundColor: [
+                        '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 10 } }
+                    }
+                }
+            }
+        });
+    }
+}
+
+/**
+ * Update tasks table with data from jira_tasks
+ */
+function updateTasksTable(tasks) {
+    const tableBody = document.getElementById('tasks-table-body');
+    if (!tableBody) {
+        console.warn('Tasks table body not found');
+        return;
+    }
+    
+    // Store all tasks
+    allTasks = tasks || [];
+    
+    // Sort tasks by code (descending)
+    allTasks.sort((a, b) => {
+        const getNumericId = (code) => {
+            const match = code.match(/\d+/);
+            return match ? parseInt(match[0], 10) : 0;
+        };
+        return getNumericId(b.code) - getNumericId(a.code);
+    });
+    
+    // Clear existing rows
+    tableBody.innerHTML = '';
+    
+    if (!allTasks || allTasks.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td colspan="11" style="text-align: center; padding: 2rem; color: #6b7280;">
+                No hay tareas disponibles. Haz clic en "Importar desde Jira" para importar tareas de SCOM.
+            </td>
+        `;
+        tableBody.appendChild(row);
+        
+        // Hide pagination if no tasks
+        const paginationContainer = document.getElementById('tasks-pagination-container');
+        if (paginationContainer) {
+            paginationContainer.style.display = 'none';
+        }
+        
+        // Update info text
+        const infoText = document.getElementById('tasks-info-text');
+        if (infoText) {
+            infoText.textContent = 'Showing 0-0 of 0 tasks';
+        }
+        
+        return;
+    }
+    
+    // Calculate pagination
+    const totalPages = Math.ceil(allTasks.length / tasksPerPage);
+    const startIndex = (currentTasksPage - 1) * tasksPerPage;
+    const endIndex = startIndex + tasksPerPage;
+    const tasksToDisplay = allTasks.slice(startIndex, endIndex);
+    
+    // Populate table with paginated tasks
+    tasksToDisplay.forEach(task => {
+        const row = document.createElement('tr');
+        
+        const statusText = getStatusText(task.status, 'task'); // Usar 'task' para estados de tareas
+        const statusClass = getStatusClass(task.status);
+        const domainText = getDomainText(task.domain);
+        
+        // Format dates if they exist
+        const startDate = task.startDate ? new Date(task.startDate).toLocaleDateString('es-ES') : '-';
+        const endDate = task.endDate ? new Date(task.endDate).toLocaleDateString('es-ES') : '-';
+        
+        // Create Jira link
+        const jiraLink = task.jiraUrl || `https://naturgy-adn.atlassian.net/browse/${task.code}`;
+        const codeDisplay = `<a href="${jiraLink}" target="_blank" rel="noopener noreferrer" style="color: #0052CC; text-decoration: none; font-weight: bold;">${task.code}</a>`;
+        
+        // Format fixVersions for display
+        let fixVersionsDisplay = '-';
+        if (task.fixVersions && task.fixVersions.length > 0) {
+            // Parse if it's a string
+            const versions = typeof task.fixVersions === 'string' 
+                ? JSON.parse(task.fixVersions) 
+                : task.fixVersions;
+            
+            if (Array.isArray(versions) && versions.length > 0) {
+                // Show version names, comma-separated
+                fixVersionsDisplay = versions.map(v => v.name).join(', ');
+            }
+        } else if (task.fix_versions && task.fix_versions.length > 0) {
+            // Handle snake_case variant
+            const versions = typeof task.fix_versions === 'string' 
+                ? JSON.parse(task.fix_versions) 
+                : task.fix_versions;
+            
+            if (Array.isArray(versions) && versions.length > 0) {
+                fixVersionsDisplay = versions.map(v => v.name).join(', ');
+            }
+        }
+        
+        row.innerHTML = `
+            <td style="text-align: left;">${codeDisplay}</td>
+            <td style="text-align: left;">${task.title}</td>
+            <td style="text-align: left;">${truncateText(task.description || '', 50)}</td>
+            <td style="text-align: left;">${domainText}</td>
+            <td style="text-align: center;">-</td>
+            <td style="text-align: center;">-</td>
+            <td style="text-align: center;">${startDate}</td>
+            <td style="text-align: center;">${endDate}</td>
+            <td style="text-align: left;">${truncateText(fixVersionsDisplay, 30)}</td>
+            <td style="text-align: center;">
+                <span class="status-badge ${statusClass}">${statusText}</span>
+            </td>
+            <td style="text-align: center;">${task.type || '-'}</td>
+            <td>
+                <span class="action-icon" data-action="edit" data-task="${task.code}" title="Editar">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                    </svg>
+                </span>
+                <span class="action-icon" data-action="delete" data-task="${task.code}" title="Eliminar">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 16px; height: 16px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                    </svg>
+                </span>
+            </td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+    
+    // Render pagination controls for tasks
+    renderTasksPagination(totalPages);
+    
+    console.log(`Tasks table updated with ${allTasks.length} tasks (showing page ${currentTasksPage} of ${totalPages})`);
+    console.log('renderTasksPagination called with totalPages:', totalPages);
+}
+
+/**
+ * Render tasks pagination controls
+ * @param {number} totalPages - Total number of pages
+ */
+function renderTasksPagination(totalPages) {
+    console.log('renderTasksPagination called:', { totalPages, allTasks: allTasks.length, currentTasksPage });
+    
+    const paginationContainer = document.getElementById('tasks-pagination-container');
+    const infoText = document.getElementById('tasks-info-text');
+    
+    console.log('Elements found:', { 
+        paginationContainer: !!paginationContainer, 
+        infoText: !!infoText 
+    });
+    
+    // Calculate display info FIRST (before any returns)
+    const startIndex = (currentTasksPage - 1) * tasksPerPage + 1;
+    const endIndex = Math.min(currentTasksPage * tasksPerPage, allTasks.length);
+    
+    // ALWAYS update info text, even if pagination is hidden
+    if (infoText) {
+        infoText.textContent = `Showing ${startIndex}-${endIndex} of ${allTasks.length} tasks`;
+        console.log('Info text updated to:', infoText.textContent);
+    } else {
+        console.error('tasks-info-text element NOT FOUND');
+    }
+    
+    if (!paginationContainer) {
+        console.warn('Tasks pagination container not found');
+        return;
+    }
+    
+    // Show pagination container
+    paginationContainer.style.display = 'flex';
+    
+    // Hide pagination if only one page or no tasks
+    if (totalPages <= 1) {
+        paginationContainer.style.display = 'none';
+        console.log('Pagination hidden (only 1 page)');
+        return;
+    }
+    
+    // Render pagination buttons in the container
+    paginationContainer.innerHTML = `
+        <button id="prev-tasks-btn" class="btn" style="margin-right: 5px;" ${currentTasksPage === 1 ? 'disabled' : ''}>
+            ←
+        </button>
+        <span id="tasks-page-info">Page ${currentTasksPage} of ${totalPages}</span>
+        <button id="next-tasks-btn" class="btn" style="margin-left: 5px;" ${currentTasksPage === totalPages ? 'disabled' : ''}>
+            →
+        </button>
+    `;
+    
+    // Add event listeners
+    const prevButton = document.getElementById('prev-tasks-btn');
+    const nextButton = document.getElementById('next-tasks-btn');
+    
+    if (prevButton) {
+        prevButton.onclick = () => {
+            if (currentTasksPage > 1) {
+                currentTasksPage--;
+                updateTasksTable(allTasks);
+            }
+        };
+    }
+    
+    if (nextButton) {
+        nextButton.onclick = () => {
+            if (currentTasksPage < totalPages) {
+                currentTasksPage++;
+                updateTasksTable(allTasks);
+            }
+        };
+    }
+}
+
+/**
+ * Edit task from Gestión de Trabajo tab
+ */
+function editTask(taskCode) {
+    console.log('Edit task called for code:', taskCode);
+    
+    // Find task in allTasks array
+    const task = allTasks.find(t => t.code === taskCode);
+    
+    if (!task) {
+        console.error(`Task ${taskCode} not found in allTasks`);
+        return;
+    }
+    
+    console.log('Task found for editing:', task);
+    
+    // Open the project modal in edit mode with source='tasks'
+    // This will show "Editar Trabajo" and hide delivery hours field
+    openEditProjectModal(task, 'tasks');
+}
+
+/**
+ * Delete task from Gestión de Trabajo tab
+ */
+async function deleteTask(taskCode) {
+    console.log('Delete task called for code:', taskCode);
+    
+    // Find task in allTasks array
+    const task = allTasks.find(t => t.code === taskCode);
+    
+    if (!task) {
+        console.error(`Task ${taskCode} not found in allTasks`);
+        return;
+    }
+    
+    // Confirm deletion
+    if (!confirm(`¿Estás seguro de que quieres eliminar el trabajo "${task.code} - ${task.title}"?`)) {
+        return;
+    }
+    
+    try {
+        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        const userTeam = sessionStorage.getItem('user_team');
+        
+        if (!awsAccessKey || !userTeam) {
+            throw new Error('No se encontró información de autenticación');
+        }
+        
+        // Delete from jira_tasks table
+        const response = await fetch(`${API_CONFIG.BASE_URL}/jira-tasks/${task.id}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': awsAccessKey,
+                'x-user-team': userTeam
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error al eliminar el trabajo');
+        }
+        
+        // Reload tasks table
+        await loadTasksFromAPI();
+        
+        // Show success message
+        alert('Trabajo eliminado correctamente');
+        
+    } catch (error) {
+        console.error('Error deleting task:', error);
+        alert(`Error al eliminar el trabajo: ${error.message}`);
+    }
+}
+
+// Make functions globally available
+window.loadTasksFromAPI = loadTasksFromAPI;
+window.updateTasksTable = updateTasksTable;
+window.editTask = editTask;
+window.deleteTask = deleteTask;
 
 // Make pagination functions globally available for onclick handlers
 window.loadPreviousEffortPage = loadPreviousEffortPage;

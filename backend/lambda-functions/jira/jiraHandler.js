@@ -67,6 +67,11 @@ async function listJiraIssues(event) {
         
         const issues = await fetchJiraIssues(jiraConfig.url, jiraConfig.auth, jqlQuery);
         
+        // Log fixVersions para debug (solo primer issue)
+        if (issues.length > 0 && issues[0].fields.fixVersions) {
+            console.log('[DEBUG] fixVersions estructura:', JSON.stringify(issues[0].fields.fixVersions, null, 2));
+        }
+        
         return (0, response_1.successResponse)({
             issues: issues.map(issue => ({
                 id: issue.id,
@@ -79,6 +84,7 @@ async function listJiraIssues(event) {
                 created: issue.fields.created,
                 updated: issue.fields.updated,
                 duedate: issue.fields.duedate,
+                fixVersions: issue.fields.fixVersions || [],
                 dominioPrincipal: issue.fields.customfield_10694?.value || 'Sin dominio',
                 prioridadNegocio: issue.fields.customfield_11346?.value || 'Media',
                 esProyecto: issue.fields.issuetype.name === 'Proyecto' ? 'Si' : 'No'
@@ -140,12 +146,22 @@ async function importFromJira(event) {
     }
     
     const body = JSON.parse(event.body);
-    const { projectKeys, issueKeys, jqlQuery, team } = body;
+    const { projectKeys, issueKeys, jqlQuery, team, source } = body;
     
     console.log('[1] Validando campos...');
     if (!team) {
         return (0, response_1.errorResponse)('Campo requerido: team', 400);
     }
+    
+    // Validar source: 'NC' para projects, 'SCOM' para jira_tasks
+    const validSources = ['NC', 'SCOM'];
+    const importSource = source || 'NC'; // Default a NC para compatibilidad
+    
+    if (!validSources.includes(importSource)) {
+        return (0, response_1.errorResponse)(`Source debe ser 'NC' o 'SCOM'`, 400);
+    }
+    
+    console.log(`[1.1] Source: ${importSource} (${importSource === 'NC' ? 'projects table' : 'jira_tasks table'})`);
     
     try {
         console.log('[2] Obteniendo configuración de Jira para el equipo...');
@@ -183,16 +199,28 @@ async function importFromJira(event) {
         const importedProjects = [];
         const updatedProjects = [];
         
+        // Determinar tabla según source
+        const tableName = importSource === 'NC' ? 'projects' : 'jira_tasks';
+        console.log(`[4.1] Usando tabla: ${tableName}`);
+        
         for (const issue of issues) {
-            // Check if project exists
+            // Check if record exists
             const existingResult = await query(
-                'SELECT id FROM projects WHERE code = $1 AND team = $2',
+                `SELECT id FROM ${tableName} WHERE code = $1 AND team = $2`,
                 [issue.key, team]
             );
             
             try {
                 const startDate = new Date(issue.fields.created);
-                const projectData = {
+                // Process fixVersions - extract relevant data
+                const fixVersions = (issue.fields.fixVersions || []).map(fv => ({
+                    id: fv.id,
+                    name: fv.name,
+                    released: fv.released || false,
+                    releaseDate: fv.releaseDate || null
+                }));
+                
+                const recordData = {
                     type: mapIssueTypeToProjectType(issue.fields.issuetype.name),
                     title: issue.fields.summary,
                     description: extractPlainText(issue.fields.description),
@@ -201,34 +229,36 @@ async function importFromJira(event) {
                     status: mapJiraStatusToLocal(issue.fields.status.name),
                     start_date: startDate,
                     end_date: issue.fields.duedate ? new Date(issue.fields.duedate) : null,
-                    jira_project_key: issue.key.split('-')[0],
-                    jira_url: jiraConfig.url
+                    jira_issue_key: issue.key,
+                    jira_url: `${jiraConfig.url}/browse/${issue.key}`,
+                    fix_versions: JSON.stringify(fixVersions)
                 };
                 
                 if (existingResult.rows.length > 0) {
-                    // SINCRONIZAR: Actualizar proyecto existente
-                    console.log(`[5a] Proyecto ${issue.key} ya existe, sincronizando...`);
+                    // SINCRONIZAR: Actualizar registro existente
+                    console.log(`[5a] ${issue.key} ya existe en ${tableName}, sincronizando...`);
                     
                     const updateSql = `
-                        UPDATE projects
+                        UPDATE ${tableName}
                         SET type = $1, title = $2, description = $3, domain = $4,
                             priority = $5, status = $6, start_date = $7, end_date = $8,
-                            jira_project_key = $9, jira_url = $10, updated_at = NOW()
-                        WHERE id = $11
+                            jira_issue_key = $9, jira_url = $10, fix_versions = $11::jsonb, updated_at = NOW()
+                        WHERE id = $12
                         RETURNING *
                     `;
                     
                     const result = await query(updateSql, [
-                        projectData.type,
-                        projectData.title,
-                        projectData.description,
-                        projectData.domain,
-                        projectData.priority,
-                        projectData.status,
-                        projectData.start_date,
-                        projectData.end_date,
-                        projectData.jira_project_key,
-                        projectData.jira_url,
+                        recordData.type,
+                        recordData.title,
+                        recordData.description,
+                        recordData.domain,
+                        recordData.priority,
+                        recordData.status,
+                        recordData.start_date,
+                        recordData.end_date,
+                        recordData.jira_issue_key,
+                        recordData.jira_url,
+                        recordData.fix_versions,
                         existingResult.rows[0].id
                     ]);
                     
@@ -236,43 +266,44 @@ async function importFromJira(event) {
                         project: result.rows[0],
                         action: 'updated'
                     });
-                    console.log(`[5a] Proyecto ${issue.key} sincronizado exitosamente`);
+                    console.log(`[5a] ${issue.key} sincronizado exitosamente en ${tableName}`);
                 } else {
-                    // IMPORTAR: Crear nuevo proyecto
-                    console.log(`[5b] Proyecto ${issue.key} no existe, creando...`);
+                    // IMPORTAR: Crear nuevo registro
+                    console.log(`[5b] ${issue.key} no existe en ${tableName}, creando...`);
                     
                     const insertSql = `
-                        INSERT INTO projects (
+                        INSERT INTO ${tableName} (
                             code, team, type, title, description, domain,
                             priority, status, start_date, end_date,
-                            jira_project_key, jira_url
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                            jira_issue_key, jira_url, fix_versions
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
                         RETURNING *
                     `;
                     
                     const result = await query(insertSql, [
                         issue.key,
                         team,
-                        projectData.type,
-                        projectData.title,
-                        projectData.description,
-                        projectData.domain,
-                        projectData.priority,
-                        projectData.status,
-                        projectData.start_date,
-                        projectData.end_date,
-                        projectData.jira_project_key,
-                        projectData.jira_url
+                        recordData.type,
+                        recordData.title,
+                        recordData.description,
+                        recordData.domain,
+                        recordData.priority,
+                        recordData.status,
+                        recordData.start_date,
+                        recordData.end_date,
+                        recordData.jira_issue_key,
+                        recordData.jira_url,
+                        recordData.fix_versions
                     ]);
                     
                     importedProjects.push({
                         project: result.rows[0],
                         action: 'created'
                     });
-                    console.log(`[5b] Proyecto ${issue.key} creado exitosamente`);
+                    console.log(`[5b] ${issue.key} creado exitosamente en ${tableName}`);
                 }
             } catch (error) {
-                console.error(`Error procesando proyecto ${issue.key}:`, error);
+                console.error(`Error procesando ${issue.key}:`, error);
             }
         }
         
@@ -464,7 +495,7 @@ async function fetchJiraIssues(jiraUrl, auth, jql) {
                 jql: paginatedJql,
                 startAt: '0',
                 maxResults: maxResults.toString(),
-                fields: 'summary,description,issuetype,status,priority,created,updated,duedate,customfield_10016,customfield_10694,customfield_11346'
+                fields: 'summary,description,issuetype,status,priority,created,updated,duedate,fixVersions,customfield_10016,customfield_10694,customfield_11346'
             });
             
             const fullUrl = `${url}?${params.toString()}`;
