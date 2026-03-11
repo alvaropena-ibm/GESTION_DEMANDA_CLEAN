@@ -3,6 +3,10 @@
 // API Configuration
 export const API_CONFIG = {
     BASE_URL: 'https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod',
+    // Auth API URL - Cognito Authentication (login-authorization-service)
+    AUTH_API_URL: 'https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/auth',
+    // IAM Auth URL (compatibilidad con sistema anterior)
+    IAM_AUTH_URL: 'https://lupjqx01jf.execute-api.eu-west-1.amazonaws.com/prod/auth/login',
     ENDPOINTS: {
         PROJECTS: '/projects',
         RESOURCES: '/resources',

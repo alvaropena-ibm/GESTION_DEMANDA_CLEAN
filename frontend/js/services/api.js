@@ -1,10 +1,11 @@
 /**
  * API Service
  * Centralized API calls for the application
+ * Soporta autenticación con Cognito (JWT) e IAM (Access Keys)
  */
 
 import { API_CONFIG } from '../config/data.js';
-import authService from './auth.js';
+import authService from './authService.js';
 
 class ApiService {
     constructor() {
@@ -12,16 +13,61 @@ class ApiService {
     }
 
     /**
-     * Make authenticated API call
+     * Make authenticated API call with automatic token refresh
      * @param {string} endpoint - API endpoint
      * @param {Object} options - Fetch options
      * @returns {Promise<any>}
      */
     async fetch(endpoint, options = {}) {
+        // Verificar autenticación
+        if (!authService.isAuthenticated()) {
+            console.warn('User not authenticated, redirecting to login');
+            window.location.href = 'login.html';
+            throw new Error('Not authenticated');
+        }
+
+        // Si es Cognito, verificar si el token está próximo a expirar y refrescarlo
+        const authType = authService.getAuthType();
+        if (authType === 'cognito' && authService.isTokenExpiringSoon()) {
+            try {
+                console.log('Token expiring soon, refreshing...');
+                await authService.refreshToken();
+            } catch (error) {
+                console.error('Failed to refresh token:', error);
+                // Si falla el refresh, el authService ya hizo logout
+                throw error;
+            }
+        }
+
+        // Obtener headers de autenticación (Cognito o IAM)
+        const authHeaders = authService.getAuthHeaders();
+
+        // Merge headers
+        const headers = {
+            ...authHeaders,
+            ...(options.headers || {})
+        };
+
         const url = `${this.baseUrl}${endpoint}`;
         
         try {
-            const response = await authService.authenticatedFetch(url, options);
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+            
+            // Manejar 401 Unauthorized
+            if (response.status === 401) {
+                console.warn('Unauthorized (401), logging out');
+                authService.logout();
+                throw new Error('Unauthorized');
+            }
+
+            // Manejar 403 Forbidden
+            if (response.status === 403) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || 'No tienes permisos para realizar esta acción');
+            }
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));

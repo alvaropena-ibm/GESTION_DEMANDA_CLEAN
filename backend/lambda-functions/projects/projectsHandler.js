@@ -108,10 +108,12 @@ async function listProjects(queryParams, userTeam) {
         sql += ` AND p.priority = $${paramIndex++}`;
         params.push(priority);
     }
-    if (userTeam) {
-        sql += ` AND p.team = $${paramIndex++}`;
-        params.push(userTeam);
-    }
+    // TEMPORALMENTE DESHABILITADO - Mostrar todos los proyectos
+    // if (userTeam && userTeam !== 'ALL') {
+    //     sql += ` AND UPPER(p.team) = UPPER($${paramIndex++})`;
+    //     params.push(userTeam);
+    // }
+    console.log('Team filter DISABLED - showing all projects. UserTeam was:', userTeam);
     
     sql += `
         GROUP BY p.id

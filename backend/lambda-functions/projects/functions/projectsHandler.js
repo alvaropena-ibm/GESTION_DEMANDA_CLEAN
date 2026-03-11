@@ -108,17 +108,30 @@ async function listProjects(queryParams, userTeam) {
         sql += ` AND p.priority = $${paramIndex++}`;
         params.push(priority);
     }
-    if (userTeam) {
-        sql += ` AND p.team = $${paramIndex++}`;
+    // Filtro por team con comparación case-insensitive
+    if (userTeam && userTeam !== 'ALL') {
+        sql += ` AND UPPER(p.team) = UPPER($${paramIndex++})`;
         params.push(userTeam);
+        console.log('✅ TEAM FILTER ENABLED - Filtering by team (case-insensitive):', userTeam);
+    } else {
+        console.log('ℹ️ TEAM FILTER DISABLED - Showing ALL projects (userTeam:', userTeam, ')');
     }
+    console.log('🔍 Query params:', params);
     
     sql += `
         GROUP BY p.id
         ORDER BY p.created_at DESC
     `;
     
+    console.log('🔍 Executing SQL query...');
+    
     const result = await query(sql, params);
+    
+    console.log('🔍 Query result - rows count:', result.rows.length);
+    if (result.rows.length > 0) {
+        console.log('🔍 First project team value:', result.rows[0].team);
+        console.log('🔍 Sample of team values:', result.rows.slice(0, 5).map(p => ({ code: p.code, team: p.team })));
+    }
     
     const projectsWithTotals = result.rows.map((project) => {
         const totalHours = project.projectSkillBreakdowns.reduce((sum, breakdown) => 

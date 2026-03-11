@@ -187,8 +187,13 @@ async function loadInitialData() {
             assignmentsManager.loadAssignments()
         ]);
         
+        // CRITICAL: Assign to window.allProjects FIRST (needed by charts)
+        window.allProjects = projects.filter(p => !p.code.startsWith('ABSENCES'));
+        window.allProjectsWithAbsences = projects;
+        console.log('✅ window.allProjects assigned:', window.allProjects.length, 'projects');
+        
         // Store in AppState for caching
-        appState.setProjects(projects.filter(p => !p.code.startsWith('ABSENCES')));
+        appState.setProjects(window.allProjects);
         appState.setProjectsWithAbsences(projects);
         appState.setResources(resources);
         appState.setAssignments(assignments);

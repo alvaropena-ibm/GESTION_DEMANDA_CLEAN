@@ -1,34 +1,56 @@
 #!/bin/bash
 
-# Script para redesplegar la función Lambda de projects
-# Uso: ./deploy.sh
+# Deploy Projects Lambda Function
+# This script packages and deploys the projects handler to AWS Lambda
 
 set -e
 
-echo "🚀 Desplegando función Lambda de projects..."
+echo "========================================="
+echo "Deploying Projects Lambda Function"
+echo "========================================="
 
-# Nombre de la función Lambda
-FUNCTION_NAME="projects-handler"
+FUNCTION_NAME="gestiondemanda_projectsHandler"
+REGION="eu-west-1"
 
-# Crear archivo ZIP con el código
-echo "📦 Creando archivo ZIP..."
-zip -r function.zip . -x "*.sh" "*.md" "node_modules/*" "*.git*"
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
 
-# Actualizar código de la función Lambda
-echo "⬆️  Subiendo código a AWS Lambda..."
+echo ""
+echo "[1/5] Installing dependencies..."
+npm install --production
+
+echo ""
+echo "[2/5] Creating deployment package..."
+zip -r function.zip . -x "*.git*" "deploy.sh" "*.md" "test*"
+
+echo ""
+echo "[3/5] Uploading to Lambda..."
 aws lambda update-function-code \
-    --function-name $FUNCTION_NAME \
-    --zip-file fileb://function.zip
+    --function-name "$FUNCTION_NAME" \
+    --zip-file fileb://function.zip \
+    --region "$REGION"
 
-# Esperar a que la función esté actualizada
-echo "⏳ Esperando a que la función se actualice..."
-aws lambda wait function-updated --function-name $FUNCTION_NAME
+echo ""
+echo "[4/5] Waiting for update to complete..."
+aws lambda wait function-updated \
+    --function-name "$FUNCTION_NAME" \
+    --region "$REGION"
 
-# Limpiar archivo ZIP
-echo "🧹 Limpiando archivos temporales..."
+echo ""
+echo "[5/5] Cleaning up..."
 rm function.zip
 
-echo "✅ Función Lambda desplegada correctamente!"
 echo ""
-echo "Para verificar el despliegue, ejecuta:"
-echo "aws lambda get-function --function-name $FUNCTION_NAME --query 'Configuration.[FunctionName,LastModified,Runtime]'"
+echo "========================================="
+echo "✅ Deployment completed successfully!"
+echo "========================================="
+echo ""
+echo "Function: $FUNCTION_NAME"
+echo "Region: $REGION"
+echo ""
+echo "Test the function:"
+echo "curl https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/projects \\"
+echo "  -H 'Authorization: Bearer YOUR_TOKEN' \\"
+echo "  -H 'x-user-team: DARWIN'"
+echo ""
