@@ -247,7 +247,7 @@ class AuthService {
         sessionStorage.clear();
         
         // Redirigir a login
-        window.location.href = 'login.html';
+        window.location.href = 'login-new.html';
     }
 
     /**

@@ -22,7 +22,7 @@ class ApiService {
         // Verificar autenticación
         if (!authService.isAuthenticated()) {
             console.warn('User not authenticated, redirecting to login');
-            window.location.href = 'login.html';
+            window.location.href = 'login-new.html';
             throw new Error('Not authenticated');
         }
 

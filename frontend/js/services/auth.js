@@ -95,7 +95,7 @@ export class AuthService {
      */
     logout() {
         sessionStorage.clear();
-        window.location.href = 'login.html';
+        window.location.href = 'login-new.html';
     }
 
     /**
@@ -103,7 +103,7 @@ export class AuthService {
      */
     requireAuth() {
         if (!this.isAuthenticated()) {
-            window.location.href = 'login.html';
+            window.location.href = 'login-new.html';
             return false;
         }
         return true;
