@@ -1,49 +1,47 @@
-const { Client } = require('pg');
+const { Pool } = require('pg');
 
-const client = new Client({
+const pool = new Pool({
     connectionString: 'postgresql://postgres:GestionDemanda2024!@gestion-demanda-db.czuimyk2qu10.eu-west-1.rds.amazonaws.com:5432/gestion_demanda'
 });
 
-async function checkTeams() {
+async function checkResources() {
     try {
-        await client.connect();
-        console.log('✅ Connected to database\n');
+        console.log('Checking resources in database...\n');
         
-        // Query 1: Ver todos los valores únicos de team
-        console.log('=== VALORES ÚNICOS DE TEAM ===');
-        const teamsResult = await client.query(`
-            SELECT DISTINCT team, COUNT(*) as count
-            FROM projects
-            GROUP BY team
-            ORDER BY team
-        `);
-        console.table(teamsResult.rows);
+        // Check all teams
+        const allTeams = await pool.query('SELECT DISTINCT team FROM resources ORDER BY team');
+        console.log('All teams in database:');
+        allTeams.rows.forEach(row => console.log(`  - ${row.team}`));
         
-        // Query 2: Ver proyectos específicos de Darwin (case-insensitive)
-        console.log('\n=== PROYECTOS DARWIN (case-insensitive) ===');
-        const darwinResult = await client.query(`
-            SELECT code, title, team
-            FROM projects
-            WHERE UPPER(team) = UPPER('DARWIN')
-            LIMIT 5
-        `);
-        console.table(darwinResult.rows);
+        console.log('\n---\n');
         
-        // Query 3: Ver todos los proyectos con team que contenga 'dar'
-        console.log('\n=== PROYECTOS CON "dar" EN TEAM ===');
-        const darResult = await client.query(`
-            SELECT code, title, team
-            FROM projects
-            WHERE LOWER(team) LIKE '%dar%'
-            LIMIT 10
-        `);
-        console.table(darResult.rows);
+        // Check DARWIN resources (case-insensitive)
+        const darwinResources = await pool.query(
+            "SELECT id, name, team FROM resources WHERE UPPER(team) = 'DARWIN' LIMIT 10"
+        );
+        
+        console.log(`Resources with team DARWIN (case-insensitive): ${darwinResources.rows.length}`);
+        darwinResources.rows.forEach(row => {
+            console.log(`  - ${row.name} (team: "${row.team}")`);
+        });
+        
+        console.log('\n---\n');
+        
+        // Check darwin resources (lowercase)
+        const darwinLower = await pool.query(
+            "SELECT id, name, team FROM resources WHERE team = 'darwin' LIMIT 10"
+        );
+        
+        console.log(`Resources with team 'darwin' (exact match): ${darwinLower.rows.length}`);
+        darwinLower.rows.forEach(row => {
+            console.log(`  - ${row.name} (team: "${row.team}")`);
+        });
         
     } catch (error) {
-        console.error('❌ Error:', error.message);
+        console.error('Error:', error.message);
     } finally {
-        await client.end();
+        await pool.end();
     }
 }
 
-checkTeams();
+checkResources();

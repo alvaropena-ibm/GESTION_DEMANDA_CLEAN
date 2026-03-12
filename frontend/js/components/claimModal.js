@@ -58,7 +58,16 @@ export function closeClaimModal() {
  */
 async function loadProjectsForClaim() {
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
@@ -68,7 +77,7 @@ async function loadProjectsForClaim() {
 
         const response = await fetch('https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/projects', {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });
@@ -101,7 +110,16 @@ async function loadProjectsForClaim() {
  */
 async function loadModulesForClaim() {
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
@@ -114,7 +132,7 @@ async function loadModulesForClaim() {
         // Llamar al endpoint con los query parameters correctos
         const response = await fetch(`https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/config?key=modules&team=${encodeURIComponent(userTeam)}`, {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });
@@ -162,7 +180,16 @@ async function loadModulesForClaim() {
  */
 async function loadTasksForProject(projectId) {
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
@@ -173,7 +200,7 @@ async function loadTasksForProject(projectId) {
         // Try to fetch concept tasks first
         const conceptResponse = await fetch(`https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/concept-tasks?projectId=${projectId}`, {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });
@@ -225,7 +252,7 @@ async function loadTasksForProject(projectId) {
         if (projectTasks.length === 0) {
             const assignmentsResponse = await fetch('https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/assignments', {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                     'x-user-team': userTeam
                 }
             });
@@ -334,7 +361,16 @@ export async function saveClaim() {
         return;
     }
 
-    const awsAccessKey = sessionStorage.getItem('aws_access_key');
+    // Get authentication tokens - support both Cognito and IAM
+    const authType = sessionStorage.getItem('auth_type');
+    let awsAccessKey;
+    
+    if (authType === 'cognito') {
+        awsAccessKey = sessionStorage.getItem('cognito_access_token');
+    } else {
+        awsAccessKey = sessionStorage.getItem('aws_access_key');
+    }
+    
     const userTeam = sessionStorage.getItem('user_team');
     const userFullName = sessionStorage.getItem('user_full_name');
     const userEmail = sessionStorage.getItem('user_email');
@@ -379,7 +415,7 @@ export async function saveClaim() {
             method: isEdit ? 'PUT' : 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             },
             body: JSON.stringify(timeEntryData)
@@ -427,7 +463,16 @@ const claimEntriesPerPage = 10;
  */
 export async function loadTimeEntries() {
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         const userFullName = sessionStorage.getItem('user_full_name');
         
@@ -440,7 +485,7 @@ export async function loadTimeEntries() {
 
         const response = await fetch('https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/time-entries', {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });
@@ -796,13 +841,22 @@ async function deleteTimeEntry(id) {
     }
 
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
 
         const response = await fetch(`https://xrqo2gedpl.execute-api.eu-west-1.amazonaws.com/prod/time-entries/${id}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });

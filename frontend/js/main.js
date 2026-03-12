@@ -1628,7 +1628,17 @@ function importFromJiraForTasks() {
 async function loadTasksFromAPI() {
     try {
         console.log('Loading tasks from jira_tasks table...');
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
@@ -1638,7 +1648,7 @@ async function loadTasksFromAPI() {
         
         const response = await fetch(`${API_CONFIG.BASE_URL}/jira-tasks`, {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });

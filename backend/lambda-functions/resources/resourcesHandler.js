@@ -102,7 +102,7 @@ async function listResources(queryParams, headers) {
         params.push(active === 'true');
     }
     if (team) {
-        sql += ` AND r.team = $${paramIndex++}`;
+        sql += ` AND UPPER(r.team) = UPPER($${paramIndex++})`;
         params.push(team);
     }
     if (skill) {

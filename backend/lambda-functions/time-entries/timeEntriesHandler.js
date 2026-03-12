@@ -64,7 +64,7 @@ async function getTimeEntries(queryParams = {}, userTeam) {
     const { projectId, resourceId, startDate, endDate, activity } = queryParams || {};
 
     // Build dynamic WHERE clause
-    const conditions = ['te.team = $1'];
+    const conditions = ['UPPER(te.team) = UPPER($1)'];
     const params = [userTeam];
     let paramIndex = 2;
 

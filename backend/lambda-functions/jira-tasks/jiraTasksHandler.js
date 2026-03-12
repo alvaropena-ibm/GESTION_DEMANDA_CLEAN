@@ -63,7 +63,7 @@ async function getAllTasks(team) {
             created_at as "createdAt",
             updated_at as "updatedAt"
         FROM jira_tasks
-        WHERE team = $1
+        WHERE UPPER(team) = UPPER($1)
         ORDER BY created_at DESC
     `;
     
@@ -87,7 +87,7 @@ async function getTaskById(id, team) {
             created_at as "createdAt",
             updated_at as "updatedAt"
         FROM jira_tasks
-        WHERE id = $1 AND team = $2
+        WHERE id = $1 AND UPPER(team) = UPPER($2)
     `;
     
     const result = await pool.query(query, [id, team]);
@@ -170,7 +170,7 @@ async function updateTask(id, taskData, team) {
             jira_url = $11,
             fix_versions = $12,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $13 AND team = $14
+        WHERE id = $13 AND UPPER(team) = UPPER($14)
         RETURNING 
             id, code, title, description, type, priority,
             start_date as "startDate",
@@ -206,7 +206,7 @@ async function updateTask(id, taskData, team) {
 async function deleteTask(id, team) {
     const query = `
         DELETE FROM jira_tasks
-        WHERE id = $1 AND team = $2
+        WHERE id = $1 AND UPPER(team) = UPPER($2)
         RETURNING id
     `;
     

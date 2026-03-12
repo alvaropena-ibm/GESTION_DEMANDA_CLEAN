@@ -108,7 +108,7 @@ async function listAssignments(queryParams, userTeam) {
     }
     
     if (userTeam) {
-        sql += ` AND r.team = $${paramIndex++}`;
+        sql += ` AND UPPER(r.team) = UPPER($${paramIndex++})`;
         params.push(userTeam);
     }
     

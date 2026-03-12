@@ -36,12 +36,21 @@ export function initializeResourceCapacity() {
  */
 async function loadCapacityData() {
     try {
-        // Get authentication tokens
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
             console.warn('No authentication tokens found');
+            console.warn('Auth type:', authType, 'Token:', !!awsAccessKey, 'Team:', userTeam);
             showErrorMessage('No se encontraron credenciales de autenticación');
             return;
         }
@@ -50,27 +59,48 @@ async function loadCapacityData() {
         console.log('User team:', userTeam);
         console.log('Year:', currentYear);
         
-        // Fetch capacity overview
-        const response = await fetch(
-            `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CAPACITY}/overview?year=${currentYear}`, 
+        // Fetch resources
+        const resourcesResponse = await fetch(
+            `${API_CONFIG.BASE_URL}/resources`, 
             {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                     'x-user-team': userTeam
                 }
             }
         );
         
-        if (!response.ok) {
-            console.error('Response not OK:', response.status, response.statusText);
-            throw new Error('Error al cargar datos de capacidad');
+        if (!resourcesResponse.ok) {
+            console.error('Resources response not OK:', resourcesResponse.status, resourcesResponse.statusText);
+            throw new Error('Error al cargar recursos');
         }
         
-        const data = await response.json();
-        console.log('Capacity data received:', data);
+        const resourcesData = await resourcesResponse.json();
+        const resources = resourcesData.data?.resources || resourcesData.resources || [];
+        console.log('Resources loaded:', resources.length);
         
-        // Store data globally
-        capacityData = data.data || data;
+        // Fetch assignments
+        const assignmentsResponse = await fetch(
+            `${API_CONFIG.BASE_URL}/assignments`, 
+            {
+                headers: {
+                    'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
+                    'x-user-team': userTeam
+                }
+            }
+        );
+        
+        if (!assignmentsResponse.ok) {
+            console.error('Assignments response not OK:', assignmentsResponse.status, assignmentsResponse.statusText);
+            throw new Error('Error al cargar asignaciones');
+        }
+        
+        const assignmentsData = await assignmentsResponse.json();
+        const assignments = assignmentsData.data?.assignments || assignmentsData.assignments || [];
+        console.log('Assignments loaded:', assignments.length);
+        
+        // Build capacity data structure
+        capacityData = buildCapacityData(resources, assignments);
         
         // Calculate potential available hours (base hours - absences) and committed hours (excluding absences)
         const { potentialAvailableHours, committedHours } = await calculateCapacityHours(awsAccessKey, userTeam);
@@ -86,6 +116,141 @@ async function loadCapacityData() {
         console.error('Error loading capacity data:', error);
         showErrorMessage('Error al cargar datos de capacidad. Por favor, intenta de nuevo.');
     }
+}
+
+/**
+ * Build capacity data structure from resources and assignments
+ */
+function buildCapacityData(resources, assignments) {
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    
+    // Build resources with monthly data
+    const resourcesWithMonthlyData = resources.map(resource => {
+        const monthlyData = [];
+        
+        // Get assignments for this resource
+        const resourceAssignments = assignments.filter(a => a.resourceId === resource.id);
+        
+        // Build monthly data for each month
+        for (let month = 1; month <= 12; month++) {
+            const monthAssignments = resourceAssignments.filter(a => {
+                let assignmentMonth = a.month;
+                let assignmentYear = a.year;
+                
+                // Extract from date if month/year not available
+                if ((!assignmentMonth || !assignmentYear) && a.date) {
+                    const dateObj = new Date(a.date);
+                    assignmentMonth = dateObj.getMonth() + 1;
+                    assignmentYear = dateObj.getFullYear();
+                }
+                
+                return assignmentMonth === month && assignmentYear === currentYear;
+            });
+            
+            // Calculate committed hours for this month
+            const committedHours = monthAssignments.reduce((sum, a) => sum + (parseFloat(a.hours) || 0), 0);
+            
+            // Calculate available hours (default capacity - committed)
+            const defaultCapacity = resource.defaultCapacity || resource.default_capacity || 160;
+            const availableHours = Math.max(0, defaultCapacity - committedHours);
+            
+            // Calculate utilization rate
+            const utilizationRate = defaultCapacity > 0 ? Math.round((committedHours / defaultCapacity) * 100) : 0;
+            
+            // Build assignments array for this month
+            const monthAssignmentsData = monthAssignments.map(a => ({
+                projectCode: a.project?.code || '',
+                projectTitle: a.project?.title || '',
+                projectType: a.project?.type || '',
+                team: a.team || '',
+                skillName: a.skillName || '',
+                hours: parseFloat(a.hours) || 0
+            }));
+            
+            monthlyData.push({
+                month,
+                committedHours: Math.round(committedHours),
+                availableHours: Math.round(availableHours),
+                utilizationRate,
+                assignments: monthAssignmentsData
+            });
+        }
+        
+        // Calculate average utilization
+        const avgUtilization = Math.round(
+            monthlyData.reduce((sum, m) => sum + m.utilizationRate, 0) / 12
+        );
+        
+        return {
+            ...resource,
+            monthlyData,
+            avgUtilization
+        };
+    });
+    
+    // Calculate KPIs
+    const totalResources = resources.length;
+    const resourcesWithAssignment = resources.filter(r => {
+        return assignments.some(a => a.resourceId === r.id);
+    }).length;
+    const resourcesWithoutAssignment = totalResources - resourcesWithAssignment;
+    
+    // Calculate average utilization for current and future months
+    const currentMonthUtilization = resourcesWithMonthlyData.reduce((sum, r) => {
+        const monthData = r.monthlyData.find(m => m.month === currentMonth);
+        return sum + (monthData?.utilizationRate || 0);
+    }, 0) / (totalResources || 1);
+    
+    const futureMonthsUtilization = resourcesWithMonthlyData.reduce((sum, r) => {
+        const futureMonths = r.monthlyData.filter(m => m.month > currentMonth);
+        const avgFuture = futureMonths.reduce((s, m) => s + m.utilizationRate, 0) / (futureMonths.length || 1);
+        return sum + avgFuture;
+    }, 0) / (totalResources || 1);
+    
+    const kpis = {
+        totalResources,
+        resourcesWithAssignment,
+        resourcesWithoutAssignment,
+        avgUtilization: {
+            current: Math.round(currentMonthUtilization),
+            future: Math.round(futureMonthsUtilization)
+        }
+    };
+    
+    // Build charts data
+    const monthlyComparison = [];
+    for (let month = 1; month <= 12; month++) {
+        const monthData = resourcesWithMonthlyData.reduce((acc, r) => {
+            const data = r.monthlyData.find(m => m.month === month);
+            return {
+                committedHours: acc.committedHours + (data?.committedHours || 0),
+                availableHours: acc.availableHours + (data?.availableHours || 0)
+            };
+        }, { committedHours: 0, availableHours: 0 });
+        
+        monthlyComparison.push(monthData);
+    }
+    
+    // Build skills availability (simplified - you can enhance this)
+    const skillsAvailability = [
+        { skill: 'Project Management', currentMonth: 0, futureMonths: 0 },
+        { skill: 'Análisis', currentMonth: 0, futureMonths: 0 },
+        { skill: 'Diseño', currentMonth: 0, futureMonths: 0 },
+        { skill: 'Construcción', currentMonth: 0, futureMonths: 0 },
+        { skill: 'QA', currentMonth: 0, futureMonths: 0 }
+    ];
+    
+    const charts = {
+        monthlyComparison,
+        skillsAvailability
+    };
+    
+    return {
+        resources: resourcesWithMonthlyData,
+        kpis,
+        charts,
+        currentMonth
+    };
 }
 
 /**

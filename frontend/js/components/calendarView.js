@@ -53,11 +53,21 @@ function debounce(func, wait) {
  */
 export async function loadCalendarView() {
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
             console.error('No authentication tokens found');
+            console.error('Auth type:', authType, 'Token:', !!awsAccessKey, 'Team:', userTeam);
             return;
         }
 
@@ -65,7 +75,7 @@ export async function loadCalendarView() {
 
         const response = await fetch(`${API_CONFIG.BASE_URL}/time-entries`, {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });
