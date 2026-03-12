@@ -54,7 +54,16 @@ export class JiraModal {
      */
     async loadMaxImportBatchConfig() {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
+            // Get authentication tokens - support both Cognito and IAM
+            const authType = sessionStorage.getItem('auth_type');
+            let awsAccessKey;
+            
+            if (authType === 'cognito') {
+                awsAccessKey = sessionStorage.getItem('cognito_access_token');
+            } else {
+                awsAccessKey = sessionStorage.getItem('aws_access_key');
+            }
+            
             const userTeam = sessionStorage.getItem('user_team');
             
             if (!awsAccessKey || !userTeam) {
@@ -62,9 +71,11 @@ export class JiraModal {
                 return;
             }
             
+            const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+            
             const response = await fetch(`${API_CONFIG.BASE_URL}/config?key=max_import_batch`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
@@ -265,13 +276,24 @@ export class JiraModal {
      */
     async importProjectsDirectly() {
         const userTeam = sessionStorage.getItem('user_team');
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
         
         if (!userTeam || !awsAccessKey) {
             alert('No se pudo obtener la información del usuario. Por favor inicia sesión de nuevo.');
             this.close();
             return;
         }
+
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
 
         this.showStep('importing');
         document.getElementById('jira-import-status').textContent = 'Descargando issues desde Jira...';
@@ -290,7 +312,7 @@ export class JiraModal {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
@@ -538,7 +560,16 @@ export class JiraModal {
      */
     async loadExistingProjects() {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
+            // Get authentication tokens - support both Cognito and IAM
+            const authType = sessionStorage.getItem('auth_type');
+            let awsAccessKey;
+            
+            if (authType === 'cognito') {
+                awsAccessKey = sessionStorage.getItem('cognito_access_token');
+            } else {
+                awsAccessKey = sessionStorage.getItem('aws_access_key');
+            }
+            
             const userTeam = sessionStorage.getItem('user_team');
             
             if (!awsAccessKey || !userTeam) {
@@ -547,9 +578,11 @@ export class JiraModal {
                 return;
             }
 
+            const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+
             const response = await fetch(`${API_CONFIG.BASE_URL}/projects`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
@@ -980,7 +1013,18 @@ export class JiraModal {
         
         try {
             const userTeam = sessionStorage.getItem('user_team');
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
+            
+            // Get authentication tokens - support both Cognito and IAM
+            const authType = sessionStorage.getItem('auth_type');
+            let awsAccessKey;
+            
+            if (authType === 'cognito') {
+                awsAccessKey = sessionStorage.getItem('cognito_access_token');
+            } else {
+                awsAccessKey = sessionStorage.getItem('aws_access_key');
+            }
+            
+            const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
             
             // Llamar al backend con el proyecto específico
             const listUrl = `${API_CONFIG.BASE_URL}/jira/issues?projectKey=${selectedProject}`;
@@ -991,7 +1035,7 @@ export class JiraModal {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
@@ -1070,7 +1114,15 @@ export class JiraModal {
      */
     async loadJiraProjectsConfig(team) {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
+            // Get authentication tokens - support both Cognito and IAM
+            const authType = sessionStorage.getItem('auth_type');
+            let awsAccessKey;
+            
+            if (authType === 'cognito') {
+                awsAccessKey = sessionStorage.getItem('cognito_access_token');
+            } else {
+                awsAccessKey = sessionStorage.getItem('aws_access_key');
+            }
             
             if (!awsAccessKey || !team) {
                 console.warn('No credentials or team for loading Jira projects config');
@@ -1079,13 +1131,15 @@ export class JiraModal {
                 return [{ key: 'NC', name: 'Naturgy Clientes' }];
             }
             
+            const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+            
             console.log(`Loading Jira projects config for team: ${team}`);
             const url = `${API_CONFIG.BASE_URL}/config?key=jira_projects&team=${team}`;
             console.log('Request URL:', url);
             
             const response = await fetch(url, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': team
                 }
             });

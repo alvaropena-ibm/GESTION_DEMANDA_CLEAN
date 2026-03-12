@@ -30,7 +30,16 @@ const AVAILABLE_SKILLS = [
  */
 async function loadMaxResourceHoursConfig() {
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
@@ -38,10 +47,12 @@ async function loadMaxResourceHoursConfig() {
             return;
         }
         
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+        
         // Request global config (team = null)
         const response = await fetch(`${API_CONFIG.BASE_URL}/config?key=max_resource_hours`, {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authHeader,
                 'x-user-team': userTeam
             }
         });
@@ -434,14 +445,24 @@ export async function saveResource() {
     // Get form data
     const emailValue = document.getElementById('resourceEmail').value.trim();
     
-    // Get authentication tokens and user team from sessionStorage
-    const awsAccessKey = sessionStorage.getItem('aws_access_key');
+    // Get authentication tokens - support both Cognito and IAM
+    const authType = sessionStorage.getItem('auth_type');
+    let awsAccessKey;
+    
+    if (authType === 'cognito') {
+        awsAccessKey = sessionStorage.getItem('cognito_access_token');
+    } else {
+        awsAccessKey = sessionStorage.getItem('aws_access_key');
+    }
+    
     const userTeam = sessionStorage.getItem('user_team');
     
     if (!awsAccessKey || !userTeam) {
         showNotification('No se encontró información de autenticación', 'error');
         return;
     }
+    
+    const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
     
     // Get selected skills
     const selectedSkills = Array.from(
@@ -485,7 +506,7 @@ export async function saveResource() {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': awsAccessKey,
+                'Authorization': authHeader,
                 'x-user-team': userTeam
             },
             body: JSON.stringify(formData)
@@ -548,12 +569,16 @@ export async function saveResource() {
 async function updateResourceSkills(resourceId, skills, awsAccessKey, userTeam) {
     console.log('Updating resource skills:', { resourceId, skills });
     
+    // Get auth type for proper header formatting
+    const authType = sessionStorage.getItem('auth_type');
+    const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+    
     try {
         // First, delete all existing skills for this resource
         const deleteResponse = await fetch(`${API_CONFIG.BASE_URL}/resources/${resourceId}/skills`, {
             method: 'DELETE',
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authHeader,
                 'x-user-team': userTeam
             }
         });
@@ -569,7 +594,7 @@ async function updateResourceSkills(resourceId, skills, awsAccessKey, userTeam) 
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': awsAccessKey,
+                        'Authorization': authHeader,
                         'x-user-team': userTeam
                     },
                     body: JSON.stringify({
@@ -654,20 +679,30 @@ export async function confirmDeleteResource() {
     }
     
     try {
-        // Get authentication tokens
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
             throw new Error('No se encontró información de autenticación');
         }
         
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+        
         // Mark resource as inactive (soft delete)
         const response = await fetch(`${API_CONFIG.BASE_URL}/resources/${currentResourceId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': awsAccessKey,
+                'Authorization': authHeader,
                 'x-user-team': userTeam
             },
             body: JSON.stringify({ active: false })

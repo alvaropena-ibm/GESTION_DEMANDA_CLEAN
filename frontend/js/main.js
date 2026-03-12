@@ -1292,7 +1292,16 @@ async function calculateProjectHours(projects) {
 async function updateDashboardByPeriod(period) {
     
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
@@ -1300,13 +1309,15 @@ async function updateDashboardByPeriod(period) {
             return;
         }
         
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+        
         // Get date range for the selected period (including 'current' which returns 1 month)
         const dateRange = getPeriodDateRange(period);
         
         // Fetch all assignments
         const response = await fetch(`${API_CONFIG.BASE_URL}/assignments`, {
             headers: {
-                'Authorization': awsAccessKey,
+                'Authorization': authHeader,
                 'x-user-team': userTeam
             }
         });

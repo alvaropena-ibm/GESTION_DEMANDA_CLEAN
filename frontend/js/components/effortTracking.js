@@ -332,7 +332,16 @@ function initializeSearch() {
  * Load effort data from API
  */
 async function loadEffortData() {
-    const awsAccessKey = sessionStorage.getItem('aws_access_key');
+    // Get authentication tokens - support both Cognito and IAM
+    const authType = sessionStorage.getItem('auth_type');
+    let awsAccessKey;
+    
+    if (authType === 'cognito') {
+        awsAccessKey = sessionStorage.getItem('cognito_access_token');
+    } else {
+        awsAccessKey = sessionStorage.getItem('aws_access_key');
+    }
+    
     const userTeam = sessionStorage.getItem('user_team');
     
     if (!awsAccessKey || !userTeam) {
@@ -341,22 +350,24 @@ async function loadEffortData() {
     }
     
     try {
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+        
         const [projectsRes, assignmentsRes, conceptTasksRes] = await Promise.all([
             fetch(`${API_CONFIG.BASE_URL}/projects`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             }),
             fetch(`${API_CONFIG.BASE_URL}/assignments`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             }),
             fetch(`${API_CONFIG.BASE_URL}/concept-tasks`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             })
