@@ -49,26 +49,31 @@ const handler = async (event) => {
 exports.handler = handler;
 
 async function listConceptTasks(queryParams) {
-    const { projectId } = queryParams;
+    const { projectId, jiraTaskId } = queryParams;
     
     let sql = `
         SELECT 
             t.*,
             json_build_object(
-                'id', p.id,
-                'code', p.code,
-                'title', p.title,
-                'type', p.type
-            ) as project
+                'id', jt.id,
+                'code', jt.code,
+                'title', jt.title,
+                'type', jt.type
+            ) as jira_task
         FROM concept_tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        WHERE p.id IS NOT NULL
+        LEFT JOIN jira_tasks jt ON t.jira_task_id = jt.id
+        WHERE jt.id IS NOT NULL
     `;
     
     const params = [];
     
-    if (projectId) {
-        sql += ` AND t.project_id = $1`;
+    // Support both jiraTaskId (new) and projectId (legacy) during transition
+    if (jiraTaskId) {
+        sql += ` AND t.jira_task_id = $1`;
+        params.push(jiraTaskId);
+    } else if (projectId) {
+        // Legacy support: convert projectId to jiraTaskId
+        sql += ` AND t.jira_task_id = (SELECT id FROM jira_tasks WHERE code = (SELECT code FROM projects WHERE id = $1))`;
         params.push(projectId);
     }
     
@@ -95,9 +100,9 @@ async function getConceptTaskById(taskId) {
     const sql = `
         SELECT 
             t.*,
-            row_to_json(p.*) as project
+            row_to_json(jt.*) as jira_task
         FROM concept_tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN jira_tasks jt ON t.jira_task_id = jt.id
         WHERE t.id = $1
     `;
     
@@ -117,9 +122,9 @@ async function createConceptTask(body) {
     
     const data = JSON.parse(body);
     
-    // Validations
-    if (!data.projectId) {
-        return (0, response_1.errorResponse)('projectId is required', 400);
+    // Validations - support both jiraTaskId (new) and projectId (legacy)
+    if (!data.jiraTaskId && !data.projectId) {
+        return (0, response_1.errorResponse)('jiraTaskId or projectId is required', 400);
     }
     if (!data.title) {
         return (0, response_1.errorResponse)('title is required', 400);
@@ -128,22 +133,37 @@ async function createConceptTask(body) {
         return (0, response_1.errorResponse)('hours must be greater than 0', 400);
     }
     
-    // Check if project exists
-    const projectCheck = await query('SELECT id FROM projects WHERE id = $1', [data.projectId]);
-    if (projectCheck.rows.length === 0) {
-        return (0, response_1.errorResponse)(`Project with ID '${data.projectId}' not found`, 404);
+    // Get jiraTaskId - either directly or by converting projectId
+    let jiraTaskId = data.jiraTaskId;
+    if (!jiraTaskId && data.projectId) {
+        // Legacy support: convert projectId to jiraTaskId
+        const conversionResult = await query(
+            'SELECT jt.id FROM jira_tasks jt INNER JOIN projects p ON jt.code = p.code WHERE p.id = $1',
+            [data.projectId]
+        );
+        if (conversionResult.rows.length > 0) {
+            jiraTaskId = conversionResult.rows[0].id;
+        } else {
+            return (0, response_1.errorResponse)(`Cannot find jira_task for project ID '${data.projectId}'`, 404);
+        }
     }
     
-    // Insert task
+    // Check if jira_task exists
+    const jiraTaskCheck = await query('SELECT id FROM jira_tasks WHERE id = $1', [jiraTaskId]);
+    if (jiraTaskCheck.rows.length === 0) {
+        return (0, response_1.errorResponse)(`JiraTask with ID '${jiraTaskId}' not found`, 404);
+    }
+    
+    // Insert task with jira_task_id
     const insertSql = `
         INSERT INTO concept_tasks (
-            project_id, title, description, hours, skill_name
+            jira_task_id, title, description, hours, skill_name
         ) VALUES ($1, $2, $3, $4, $5)
         RETURNING *
     `;
     
     const insertParams = [
-        data.projectId,
+        jiraTaskId,
         data.title,
         data.description || null,
         data.hours,
@@ -153,13 +173,13 @@ async function createConceptTask(body) {
     const result = await query(insertSql, insertParams);
     const task = result.rows[0];
     
-    // Get task with project info
+    // Get task with jira_task info
     const detailsSql = `
         SELECT 
             t.*,
-            json_build_object('id', p.id, 'code', p.code, 'title', p.title) as project
+            json_build_object('id', jt.id, 'code', jt.code, 'title', jt.title) as jira_task
         FROM concept_tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN jira_tasks jt ON t.jira_task_id = jt.id
         WHERE t.id = $1
     `;
     
@@ -226,13 +246,13 @@ async function updateConceptTask(taskId, body) {
     
     await query(updateSql, params);
     
-    // Get updated task with project info
+    // Get updated task with jira_task info
     const detailsSql = `
         SELECT 
             t.*,
-            json_build_object('id', p.id, 'code', p.code, 'title', p.title) as project
+            json_build_object('id', jt.id, 'code', jt.code, 'title', jt.title) as jira_task
         FROM concept_tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN jira_tasks jt ON t.jira_task_id = jt.id
         WHERE t.id = $1
     `;
     

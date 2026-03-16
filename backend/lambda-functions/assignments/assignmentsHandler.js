@@ -53,19 +53,19 @@ const handler = async (event) => {
 exports.handler = handler;
 
 async function listAssignments(queryParams, userTeam) {
-    const { projectId, resourceId, month, year, skillName } = queryParams;
+    const { projectId, jiraTaskId, resourceId, month, year, skillName } = queryParams;
     
     let sql = `
         SELECT 
             a.*,
             json_build_object(
-                'id', p.id,
-                'code', p.code,
-                'title', p.title,
-                'type', p.type,
-                'priority', p.priority,
-                'status', p.status
-            ) as project,
+                'id', jt.id,
+                'code', jt.code,
+                'title', jt.title,
+                'type', jt.type,
+                'priority', jt.priority,
+                'status', jt.status
+            ) as jira_task,
             json_build_object(
                 'id', r.id,
                 'code', r.code,
@@ -74,7 +74,7 @@ async function listAssignments(queryParams, userTeam) {
                 'active', r.active
             ) as resource
         FROM assignments a
-        LEFT JOIN projects p ON a.project_id = p.id
+        LEFT JOIN jira_tasks jt ON a.jira_task_id = jt.id
         LEFT JOIN resources r ON a.resource_id = r.id
         WHERE 1=1
     `;
@@ -82,8 +82,13 @@ async function listAssignments(queryParams, userTeam) {
     const params = [];
     let paramIndex = 1;
     
-    if (projectId) {
-        sql += ` AND a.project_id = $${paramIndex++}`;
+    // Support both jiraTaskId (new) and projectId (legacy) during transition
+    if (jiraTaskId) {
+        sql += ` AND a.jira_task_id = $${paramIndex++}`;
+        params.push(jiraTaskId);
+    } else if (projectId) {
+        // Legacy support: convert projectId to jiraTaskId
+        sql += ` AND a.jira_task_id = (SELECT id FROM jira_tasks WHERE code = (SELECT code FROM projects WHERE id = $${paramIndex++}))`;
         params.push(projectId);
     }
     
@@ -135,10 +140,10 @@ async function getAssignmentById(assignmentId) {
     const sql = `
         SELECT 
             a.*,
-            row_to_json(p.*) as project,
+            row_to_json(jt.*) as jira_task,
             row_to_json(r.*) as resource
         FROM assignments a
-        LEFT JOIN projects p ON a.project_id = p.id
+        LEFT JOIN jira_tasks jt ON a.jira_task_id = jt.id
         LEFT JOIN resources r ON a.resource_id = r.id
         WHERE a.id = $1
     `;
@@ -159,9 +164,9 @@ async function createAssignment(body) {
     
     const data = JSON.parse(body);
     
-    // Validations
-    if (!data.projectId) {
-        return (0, response_1.errorResponse)('projectId is required', 400);
+    // Validations - support both jiraTaskId (new) and projectId (legacy)
+    if (!data.jiraTaskId && !data.projectId) {
+        return (0, response_1.errorResponse)('jiraTaskId or projectId is required', 400);
     }
     if (!data.title) {
         return (0, response_1.errorResponse)('title is required', 400);
@@ -178,10 +183,25 @@ async function createAssignment(body) {
         return (0, response_1.errorResponse)('hours must be greater than 0', 400);
     }
     
-    // Check if project exists
-    const projectCheck = await query('SELECT id FROM projects WHERE id = $1', [data.projectId]);
-    if (projectCheck.rows.length === 0) {
-        return (0, response_1.errorResponse)(`Project with ID '${data.projectId}' not found`, 404);
+    // Get jiraTaskId - either directly or by converting projectId
+    let jiraTaskId = data.jiraTaskId;
+    if (!jiraTaskId && data.projectId) {
+        // Legacy support: convert projectId to jiraTaskId
+        const conversionResult = await query(
+            'SELECT jt.id FROM jira_tasks jt INNER JOIN projects p ON jt.code = p.code WHERE p.id = $1',
+            [data.projectId]
+        );
+        if (conversionResult.rows.length > 0) {
+            jiraTaskId = conversionResult.rows[0].id;
+        } else {
+            return (0, response_1.errorResponse)(`Cannot find jira_task for project ID '${data.projectId}'`, 404);
+        }
+    }
+    
+    // Check if jira_task exists
+    const jiraTaskCheck = await query('SELECT id FROM jira_tasks WHERE id = $1', [jiraTaskId]);
+    if (jiraTaskCheck.rows.length === 0) {
+        return (0, response_1.errorResponse)(`JiraTask with ID '${jiraTaskId}' not found`, 404);
     }
     
     // If resourceId provided, validate and check capacity
@@ -256,17 +276,17 @@ async function createAssignment(body) {
         year = data.year;
     }
     
-    // Insert assignment
+    // Insert assignment with jira_task_id
     const insertSql = `
         INSERT INTO assignments (
-            project_id, resource_id, title, description, skill_name, team, module,
+            jira_task_id, resource_id, title, description, skill_name, team, module,
             date, month, year, hours
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
     `;
     
     const insertParams = [
-        data.projectId,
+        jiraTaskId,
         data.resourceId || null,
         data.title,
         data.description || null,
@@ -282,14 +302,14 @@ async function createAssignment(body) {
     const result = await query(insertSql, insertParams);
     const assignment = result.rows[0];
     
-    // Get related project and resource info
+    // Get related jira_task and resource info
     const detailsSql = `
         SELECT 
             a.*,
-            json_build_object('id', p.id, 'code', p.code, 'title', p.title) as project,
+            json_build_object('id', jt.id, 'code', jt.code, 'title', jt.title) as jira_task,
             json_build_object('id', r.id, 'code', r.code, 'name', r.name) as resource
         FROM assignments a
-        LEFT JOIN projects p ON a.project_id = p.id
+        LEFT JOIN jira_tasks jt ON a.jira_task_id = jt.id
         LEFT JOIN resources r ON a.resource_id = r.id
         WHERE a.id = $1
     `;
@@ -379,10 +399,10 @@ async function updateAssignment(assignmentId, body) {
     const detailsSql = `
         SELECT 
             a.*,
-            json_build_object('id', p.id, 'code', p.code, 'title', p.title) as project,
+            json_build_object('id', jt.id, 'code', jt.code, 'title', jt.title) as jira_task,
             json_build_object('id', r.id, 'code', r.code, 'name', r.name) as resource
         FROM assignments a
-        LEFT JOIN projects p ON a.project_id = p.id
+        LEFT JOIN jira_tasks jt ON a.jira_task_id = jt.id
         LEFT JOIN resources r ON a.resource_id = r.id
         WHERE a.id = $1
     `;
@@ -392,25 +412,52 @@ async function updateAssignment(assignmentId, body) {
     return (0, response_1.successResponse)(detailsResult.rows[0]);
 }
 
-async function deleteProjectAssignments(projectId) {
-    console.log('Deleting all assignments for project:', projectId);
+async function deleteProjectAssignments(projectIdOrJiraTaskId) {
+    console.log('Deleting all assignments for project/jiraTask:', projectIdOrJiraTaskId);
+    
+    // Try to determine if it's a jiraTaskId or projectId
+    // First, check if it exists in jira_tasks
+    const jiraTaskCheck = await query(
+        'SELECT id FROM jira_tasks WHERE id = $1',
+        [projectIdOrJiraTaskId]
+    );
+    
+    let jiraTaskId = null;
+    
+    if (jiraTaskCheck.rows.length > 0) {
+        // It's a jiraTaskId
+        jiraTaskId = projectIdOrJiraTaskId;
+    } else {
+        // Try to convert projectId to jiraTaskId
+        const conversionResult = await query(
+            'SELECT jt.id FROM jira_tasks jt INNER JOIN projects p ON jt.code = p.code WHERE p.id = $1',
+            [projectIdOrJiraTaskId]
+        );
+        if (conversionResult.rows.length > 0) {
+            jiraTaskId = conversionResult.rows[0].id;
+        }
+    }
+    
+    if (!jiraTaskId) {
+        return (0, response_1.errorResponse)('Cannot find jira_task for the provided ID', 404);
+    }
     
     const countResult = await query(
-        'SELECT COUNT(*) as count FROM assignments WHERE project_id = $1',
-        [projectId]
+        'SELECT COUNT(*) as count FROM assignments WHERE jira_task_id = $1',
+        [jiraTaskId]
     );
     
     console.log('Found', countResult.rows[0].count, 'assignments to delete');
     
     const deleteResult = await query(
-        'DELETE FROM assignments WHERE project_id = $1',
-        [projectId]
+        'DELETE FROM assignments WHERE jira_task_id = $1',
+        [jiraTaskId]
     );
     
     console.log('Deleted', deleteResult.rowCount, 'assignments');
     
     return (0, response_1.successResponse)({
-        message: `Deleted ${deleteResult.rowCount} assignments from project`,
+        message: `Deleted ${deleteResult.rowCount} assignments from jira_task`,
         deletedCount: deleteResult.rowCount
     });
 }

@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-03-13T07:36:46.296Z",
+  "database": "gestion_demanda",
+  "tables": {
+    "assignments": 156,
+    "concept_tasks": 11,
+    "projects": 74,
+    "jira_tasks": 7
+  },
+  "files": {
+    "assignments": "/Users/alvaro.pena/Desktop/GESTION-DEMANDA-V2/GESTION_DEMANDA_CLEAN/backend/prisma/migrations/backups/assignments_backup_2026-03-13T07-36-45.json",
+    "concept_tasks": "/Users/alvaro.pena/Desktop/GESTION-DEMANDA-V2/GESTION_DEMANDA_CLEAN/backend/prisma/migrations/backups/concept_tasks_backup_2026-03-13T07-36-45.json",
+    "projects": "/Users/alvaro.pena/Desktop/GESTION-DEMANDA-V2/GESTION_DEMANDA_CLEAN/backend/prisma/migrations/backups/projects_backup_2026-03-13T07-36-45.json",
+    "jira_tasks": "/Users/alvaro.pena/Desktop/GESTION-DEMANDA-V2/GESTION_DEMANDA_CLEAN/backend/prisma/migrations/backups/jira_tasks_backup_2026-03-13T07-36-45.json"
+  }
+}

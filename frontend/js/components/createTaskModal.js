@@ -341,7 +341,7 @@ export class CreateTaskModal {
                 // CREATE MODE: Create new concept task
                 const createData = {
                     ...taskData,
-                    projectId: this.projectId
+                    jiraTaskId: this.projectId  // Use jiraTaskId (backend supports both)
                 };
                 
                 console.log('[TRACE 1] Creating concept task:', createData);

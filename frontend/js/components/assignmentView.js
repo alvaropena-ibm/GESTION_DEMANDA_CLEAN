@@ -67,14 +67,24 @@ export async function openAssignmentView(projectId, projectCode, projectTitle = 
     currentProjectCode = projectCode;
     
     try {
-        // Get authentication tokens
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
             showNotification('No se encontraron credenciales de autenticación', 'error');
             return;
         }
+        
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
         
         // Load tasks/assignments for this project
         allAssignments = await loadProjectTasks(projectId, awsAccessKey, userTeam);
@@ -107,11 +117,16 @@ export async function openAssignmentView(projectId, projectCode, projectTitle = 
  * Load tasks/assignments for a project
  */
 async function loadProjectTasks(projectId, awsAccessKey, userTeam) {
-    console.log('Loading concept tasks for project:', projectId);
+    console.log('Loading concept tasks for jira_task:', projectId);
     
-    const response = await fetch(`${API_CONFIG.BASE_URL}/concept-tasks?projectId=${projectId}`, {
+    // Determine auth header format
+    const authType = sessionStorage.getItem('auth_type');
+    const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+    
+    // Use jiraTaskId parameter (backend supports both projectId and jiraTaskId)
+    const response = await fetch(`${API_CONFIG.BASE_URL}/concept-tasks?jiraTaskId=${projectId}`, {
         headers: {
-            'Authorization': awsAccessKey,
+            'Authorization': authHeader,
             'x-user-team': userTeam
         }
     });

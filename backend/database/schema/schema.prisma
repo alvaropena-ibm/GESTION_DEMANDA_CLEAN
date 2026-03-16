@@ -40,9 +40,7 @@ model Project {
   jiraUrl                String?                 @map("jira_url")
   createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt              DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  assignments            Assignment[]
   projectSkillBreakdowns ProjectSkillBreakdown[]
-  conceptTasks           ConceptTask[]
 
   @@unique([code, team])
   @@index([code], map: "idx_projects_code")
@@ -123,7 +121,8 @@ model Capacity {
 
 model Assignment {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId    String    @map("project_id") @db.Uuid
+  projectId    String?   @map("project_id") @db.Uuid
+  jiraTaskId   String?   @map("jira_task_id") @db.Uuid
   resourceId   String?   @map("resource_id") @db.Uuid
   title        String    @db.VarChar(255)
   description  String?
@@ -138,10 +137,11 @@ model Assignment {
   jiraIssueId  String?   @map("jira_issue_id")
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jiraTask     JiraTask? @relation(fields: [jiraTaskId], references: [id], onDelete: Cascade)
   resource     Resource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
 
   @@index([projectId], map: "idx_assignments_project")
+  @@index([jiraTaskId], map: "idx_assignments_jira_task")
   @@index([resourceId], map: "idx_assignments_resource")
   @@index([year, month], map: "idx_assignments_period")
   @@index([skillName], map: "idx_assignments_skill_name")
@@ -152,37 +152,41 @@ model Assignment {
 }
 
 model ConceptTask {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId   String   @map("project_id") @db.Uuid
-  title       String   @db.VarChar(255)
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String?   @map("project_id") @db.Uuid
+  jiraTaskId  String?   @map("jira_task_id") @db.Uuid
+  title       String    @db.VarChar(255)
   description String?
-  hours       Decimal  @db.Decimal(10, 2)
-  skillName   String?  @map("skill_name") @db.VarChar(100)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  hours       Decimal   @db.Decimal(10, 2)
+  skillName   String?   @map("skill_name") @db.VarChar(100)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  jiraTask    JiraTask? @relation(fields: [jiraTaskId], references: [id], onDelete: Cascade)
 
   @@index([projectId], map: "idx_concept_tasks_project")
+  @@index([jiraTaskId], map: "idx_concept_tasks_jira_task")
   @@index([skillName], map: "idx_concept_tasks_skill_name")
   @@map("concept_tasks")
 }
 
 model JiraTask {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code           String    @db.VarChar(50)
-  title          String    @db.VarChar(255)
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String        @db.VarChar(50)
+  title          String        @db.VarChar(255)
   description    String?
-  type           String?   @db.VarChar(20)
-  priority       String    @db.VarChar(20)
-  startDate      DateTime? @map("start_date") @db.Date
-  endDate        DateTime? @map("end_date") @db.Date
-  status         Int       @map("status")
-  domain         Int       @map("domain")
-  team           String    @db.VarChar(50)
-  jiraIssueKey   String?   @map("jira_issue_key")
-  jiraUrl        String?   @map("jira_url")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  type           String?       @db.VarChar(20)
+  priority       String        @db.VarChar(20)
+  startDate      DateTime?     @map("start_date") @db.Date
+  endDate        DateTime?     @map("end_date") @db.Date
+  status         Int           @map("status")
+  domain         Int           @map("domain")
+  team           String        @db.VarChar(50)
+  jiraIssueKey   String?       @map("jira_issue_key")
+  jiraUrl        String?       @map("jira_url")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  assignments    Assignment[]
+  conceptTasks   ConceptTask[]
 
   @@unique([code, team])
   @@index([code], map: "idx_jira_tasks_code")

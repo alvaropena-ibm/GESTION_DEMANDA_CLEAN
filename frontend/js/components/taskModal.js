@@ -119,23 +119,47 @@ export class TaskModal {
     }
 
     /**
+     * Get authentication headers - supports both Cognito and IAM
+     */
+    getAuthHeaders() {
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
+        const userTeam = sessionStorage.getItem('user_team');
+        
+        if (!awsAccessKey || !userTeam) {
+            return null;
+        }
+        
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+        
+        return {
+            'Authorization': authHeader,
+            'x-user-team': userTeam
+        };
+    }
+
+    /**
      * Load existing assignments for this project and transform to grid format
      */
     async loadProjectAssignments() {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const headers = this.getAuthHeaders();
             
-            if (!awsAccessKey || !userTeam) {
+            if (!headers) {
                 console.warn('No authentication tokens found');
                 return [];
             }
             
-            const response = await fetch(`${API_CONFIG.BASE_URL}/assignments?projectId=${this.projectId}`, {
-                headers: {
-                    'Authorization': awsAccessKey,
-                    'x-user-team': userTeam
-                }
+            // Use jiraTaskId parameter for jira_tasks, projectId for legacy projects
+            const response = await fetch(`${API_CONFIG.BASE_URL}/assignments?jiraTaskId=${this.projectId}`, {
+                headers
             });
             
             if (!response.ok) {
@@ -207,20 +231,16 @@ export class TaskModal {
      */
     async loadTasks() {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const headers = this.getAuthHeaders();
             
-            if (!awsAccessKey || !userTeam) {
+            if (!headers) {
                 console.warn('No authentication tokens found');
                 return [];
             }
             
             // Load from concept_tasks table instead of assignments
             const response = await fetch(`${API_CONFIG.BASE_URL}/concept-tasks?projectId=${this.projectId}`, {
-                headers: {
-                    'Authorization': awsAccessKey,
-                    'x-user-team': userTeam
-                }
+                headers
             });
             
             if (!response.ok) {
@@ -253,19 +273,17 @@ export class TaskModal {
      */
     async loadResources() {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const headers = this.getAuthHeaders();
             
-            if (!awsAccessKey || !userTeam) {
+            if (!headers) {
                 console.warn('No authentication tokens found');
                 return [];
             }
             
+            const userTeam = sessionStorage.getItem('user_team');
+            
             const response = await fetch(`${API_CONFIG.BASE_URL}/resources`, {
-                headers: {
-                    'Authorization': awsAccessKey,
-                    'x-user-team': userTeam
-                }
+                headers
             });
             
             if (!response.ok) {
@@ -298,21 +316,18 @@ export class TaskModal {
      */
     async loadModules() {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const headers = this.getAuthHeaders();
             
-            if (!awsAccessKey || !userTeam) {
+            if (!headers) {
                 console.warn('No authentication tokens found');
                 return [];
             }
 
+            const userTeam = sessionStorage.getItem('user_team');
             console.log(`📦 Loading modules for team: ${userTeam}`);
 
             const response = await fetch(`${API_CONFIG.BASE_URL}/config?key=modules&team=${encodeURIComponent(userTeam)}`, {
-                headers: {
-                    'Authorization': awsAccessKey,
-                    'x-user-team': userTeam
-                }
+                headers
             });
 
             if (response.ok) {
@@ -369,6 +384,47 @@ export class TaskModal {
         // Load existing assignments for this project
         const loadedAssignments = await this.loadProjectAssignments();
         console.log('Loaded assignments for project:', loadedAssignments.length);
+
+        // Initialize AG Grid with loaded data
+        this.initializeGrid(loadedAssignments, startDate, endDate);
+
+        // Show modal
+        this.modalElement.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    /**
+     * Open modal for a specific jira_task (from Gestión de Trabajo tab)
+     * @param {string} jiraTaskId - UUID of the jira_task
+     * @param {string} taskCode - Code of the task (e.g., "DAR-5507")
+     * @param {string} taskName - Name/title of the task
+     * @param {Array} existingTasks - Existing tasks from storage
+     * @param {string} startDate - Start date
+     * @param {string} endDate - End date
+     */
+    async openForJiraTask(jiraTaskId, taskCode, taskName, existingTasks = [], startDate = null, endDate = null) {
+        // For jira_tasks, use the UUID directly
+        this.projectId = jiraTaskId; // This is the UUID from jira_tasks table
+        this.projectCode = taskCode;
+        this.projectName = taskName;
+        this.startDate = startDate;
+        this.endDate = endDate;
+
+        console.log('Opening modal for jira_task:', { id: jiraTaskId, code: taskCode, name: taskName });
+
+        // Update modal title with task code
+        const dateRange = startDate && endDate ? ` (${startDate} - ${endDate})` : '';
+        document.getElementById('modal-project-title').textContent = 
+            `Asignación de Recursos - ${taskCode} - ${taskName}${dateRange}`;
+
+        // Load resources, tasks, and modules before initializing grid
+        this.resourcesList = await this.loadResources();
+        this.tasksList = await this.loadTasks();
+        this.modulesList = await this.loadModules();
+
+        // Load existing assignments for this jira_task
+        const loadedAssignments = await this.loadProjectAssignments();
+        console.log('Loaded assignments for jira_task:', loadedAssignments.length);
 
         // Initialize AG Grid with loaded data
         this.initializeGrid(loadedAssignments, startDate, endDate);
@@ -895,10 +951,9 @@ export class TaskModal {
      * Strategy: Delete all existing assignments for this project, then create new ones
      */
     async saveToDatabase(rows) {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
-        const userTeam = sessionStorage.getItem('user_team');
+        const headers = this.getAuthHeaders();
         
-        if (!awsAccessKey || !userTeam) {
+        if (!headers) {
             throw new Error('No authentication tokens found');
         }
 
@@ -907,10 +962,7 @@ export class TaskModal {
         try {
             const deleteResponse = await fetch(`${API_CONFIG.BASE_URL}/assignments?projectId=${this.projectId}`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': awsAccessKey,
-                    'x-user-team': userTeam
-                }
+                headers
             });
             
             if (deleteResponse.ok) {
@@ -946,7 +998,7 @@ export class TaskModal {
                     console.log('Sending assignment with date:', key, '-> UTC:', dateToSend);
                     
                     assignments.push({
-                        projectId: this.projectId,
+                        jiraTaskId: this.projectId, // Use jiraTaskId for jira_tasks table
                         resourceId: resource.id,
                         title: row.tarea || 'Sin título',
                         description: row.detalleTarea || '',
@@ -976,9 +1028,8 @@ export class TaskModal {
                 const response = await fetch(`${API_CONFIG.BASE_URL}/assignments`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': awsAccessKey,
-                        'x-user-team': userTeam
+                        ...headers,
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(assignment)
                 });
@@ -1106,10 +1157,9 @@ export class TaskModal {
      * Checks if the sum of hours per resource and date exceeds daily capacity
      */
     async validateCapacityBeforeSave(rows) {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
-        const userTeam = sessionStorage.getItem('user_team');
+        const headers = this.getAuthHeaders();
         
-        if (!awsAccessKey || !userTeam) {
+        if (!headers) {
             return []; // Can't validate without auth
         }
 
@@ -1151,10 +1201,7 @@ export class TaskModal {
                 const response = await fetch(
                     `${API_CONFIG.BASE_URL}/assignments?resourceId=${resourceId}`,
                     {
-                        headers: {
-                            'Authorization': awsAccessKey,
-                            'x-user-team': userTeam
-                        }
+                        headers
                     }
                 );
                 
