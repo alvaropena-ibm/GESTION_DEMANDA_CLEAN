@@ -1209,26 +1209,26 @@ export class TaskModal {
                     const data = await response.json();
                     const assignments = data.data?.assignments || data.assignments || [];
                     
-                    console.log(`[validateCapacity] Current projectId: ${this.projectId} (type: ${typeof this.projectId})`);
+                    console.log(`[validateCapacity] Current jiraTaskId: ${this.projectId} (type: ${typeof this.projectId})`);
                     console.log(`[validateCapacity] Total assignments for resource ${resourceId}:`, assignments.length);
                     
-                    // Filter assignments for this date, excluding current project
+                    // Filter assignments for this date, excluding current jira_task
                     const assignedHours = assignments
                         .filter(a => {
                             const assignmentDate = a.date ? a.date.toString().split('T')[0] : null;
                             const matchesDate = assignmentDate === date;
                             
-                            // Handle both camelCase and snake_case projectId
-                            const assignmentProjectId = a.projectId || a.project_id;
+                            // Get jira_task_id from assignment (handle both camelCase and snake_case)
+                            const assignmentJiraTaskId = a.jiraTaskId || a.jira_task_id;
                             
-                            // Compare as strings to handle both string and number IDs
-                            const isDifferentProject = String(assignmentProjectId) !== String(this.projectId);
+                            // Compare as strings to handle both string and UUID formats
+                            const isDifferentTask = String(assignmentJiraTaskId) !== String(this.projectId);
                             
                             if (matchesDate) {
-                                console.log(`[validateCapacity] Assignment on ${date}: projectId=${assignmentProjectId} (original: projectId=${a.projectId}, project_id=${a.project_id}), hours=${a.hours}, isDifferent=${isDifferentProject}`);
+                                console.log(`[validateCapacity] Assignment on ${date}: jiraTaskId=${assignmentJiraTaskId}, hours=${a.hours}, isDifferent=${isDifferentTask}`);
                             }
                             
-                            return matchesDate && isDifferentProject;
+                            return matchesDate && isDifferentTask;
                         })
                         .reduce((sum, a) => sum + parseFloat(a.hours || 0), 0);
                     

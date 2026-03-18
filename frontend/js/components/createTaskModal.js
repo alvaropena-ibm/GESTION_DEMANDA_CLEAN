@@ -276,14 +276,25 @@ export class CreateTaskModal {
         };
 
         try {
-            // Get authentication tokens
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
+            // Get authentication tokens - support both Cognito and IAM
+            const authType = sessionStorage.getItem('auth_type');
+            let awsAccessKey;
+            
+            if (authType === 'cognito') {
+                awsAccessKey = sessionStorage.getItem('cognito_access_token');
+            } else {
+                awsAccessKey = sessionStorage.getItem('aws_access_key');
+            }
+            
             const userTeam = sessionStorage.getItem('user_team');
             
             if (!awsAccessKey || !userTeam) {
                 showNotification('No se encontraron credenciales de autenticación', 'error');
+                this.isSaving = false;
                 return;
             }
+            
+            const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
 
             if (this.editMode && this.editTaskIds && this.editTaskIds.length > 0) {
                 // EDIT MODE: Update concept task
@@ -298,7 +309,7 @@ export class CreateTaskModal {
                     const response = await fetch(`${API_CONFIG.BASE_URL}/concept-tasks/${taskId}`, {
                         method: 'PUT',
                         headers: {
-                            'Authorization': awsAccessKey,
+                            'Authorization': authHeader,
                             'x-user-team': userTeam,
                             'Content-Type': 'application/json'
                         },
@@ -353,7 +364,7 @@ export class CreateTaskModal {
                 const response = await fetch(`${API_CONFIG.BASE_URL}/concept-tasks`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': awsAccessKey,
+                        'Authorization': authHeader,
                         'x-user-team': userTeam,
                         'Content-Type': 'application/json'
                     },

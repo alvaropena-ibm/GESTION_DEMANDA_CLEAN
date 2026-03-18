@@ -239,7 +239,7 @@ function createAssignmentModal(projectCode, projectTitle, assignments) {
                     
                     <!-- Tasks Table -->
                     <div style="margin-bottom: 1rem; overflow-x: auto;">
-                            <table id="tasks-table">
+                            <table id="concept-tasks-table">
                             <thead>
                                 <tr>
                                     <th style="text-align: left;">ID</th>
@@ -250,7 +250,7 @@ function createAssignmentModal(projectCode, projectTitle, assignments) {
                                     <th style="text-align: center;">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody id="tasks-table-body">
+                            <tbody id="concept-tasks-table-body">
                                 <!-- Tasks will be populated here -->
                             </tbody>
                         </table>
@@ -448,10 +448,12 @@ function getSkillAbbreviation(skillName) {
  * Populate tasks table with HTML
  */
 function populateTasksTable(assignments) {
-    const tableBody = document.getElementById('tasks-table-body');
+    console.log('populateTasksTable called with assignments:', assignments);
+    
+    const tableBody = document.getElementById('concept-tasks-table-body');
     
     if (!tableBody) {
-        console.error('Tasks table body not found');
+        console.error('Concept tasks table body not found');
         return;
     }
     
@@ -459,7 +461,7 @@ function populateTasksTable(assignments) {
     tableBody.innerHTML = '';
     
     if (assignments.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #718096; font-style: italic;">No hay tareas en este proyecto</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #718096; font-style: italic;">No hay tareas en este proyecto</td></tr>';
         return;
     }
     
@@ -467,8 +469,9 @@ function populateTasksTable(assignments) {
     const groupedMap = new Map();
     
     assignments.forEach(assignment => {
+        console.log('Processing assignment:', assignment);
         // Create a unique key for grouping: title + resourceId (or 'pending' if no resource)
-        const key = `${assignment.title}|${assignment.resourceId || 'pending'}`;
+        const key = `${assignment.title}|${assignment.resourceId || assignment.resource_id || 'pending'}`;
         
         if (!groupedMap.has(key)) {
             groupedMap.set(key, {
@@ -476,11 +479,11 @@ function populateTasksTable(assignments) {
                 allIds: [],
                 title: assignment.title || '',
                 description: assignment.description || '',
-                skillName: assignment.skillName || '-',
+                skillName: assignment.skillName || assignment.skill_name || '-',
                 hours: 0,
-                resourceId: assignment.resourceId || null,
-                resourceName: assignment.resourceId ? getResourceName(assignment.resourceId) : '-',
-                isPending: !assignment.resourceId
+                resourceId: assignment.resourceId || assignment.resource_id || null,
+                resourceName: (assignment.resourceId || assignment.resource_id) ? getResourceName(assignment.resourceId || assignment.resource_id) : '-',
+                isPending: !(assignment.resourceId || assignment.resource_id)
             });
         }
         
@@ -907,13 +910,24 @@ async function deleteTask(taskIds, tableInstance) {
     if (!confirmed) return;
     
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
             showNotification('No se encontraron credenciales de autenticación', 'error');
             return;
         }
+        
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
         
         let successCount = 0;
         let errorCount = 0;
@@ -964,7 +978,16 @@ async function deleteTask(taskIds, tableInstance) {
  */
 async function refreshAssignmentView(projectId, projectCode) {
     try {
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
