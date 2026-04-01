@@ -1572,9 +1572,21 @@ async function updateKPIsWithFilteredData(assignments) {
     let trabajosProyectos = 0;
     
     try {
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
+        const userTeam = sessionStorage.getItem('user_team');
+        
         const tasksResponse = await fetch(`${API_CONFIG.BASE_URL}/jira-tasks`, {
             headers: {
-                'Authorization': authHeader,
+                'Authorization': authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey,
                 'x-user-team': userTeam
             }
         });

@@ -227,12 +227,21 @@ async function initializeOverviewCommittedHoursChart() {
         // Importar la función de cálculo desde resourceCapacity.js
         const { calculateCapacityHoursFromResourceCapacity } = await import('./resourceCapacity.js');
         
-        // Get authentication tokens
-        const awsAccessKey = sessionStorage.getItem('aws_access_key');
+        // Get authentication tokens - support both Cognito and IAM
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
         const userTeam = sessionStorage.getItem('user_team');
         
         if (!awsAccessKey || !userTeam) {
             console.warn('No authentication for overview chart');
+            console.warn('Auth type:', authType, 'Token:', !!awsAccessKey, 'Team:', userTeam);
             return;
         }
         
