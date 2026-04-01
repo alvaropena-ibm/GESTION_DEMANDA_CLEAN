@@ -270,22 +270,27 @@ export async function initializeOverviewSplitHoursChart() {
         const percentConceptualizacion = total > 0 ? ((horasProyectosConceptualizacion / total) * 100).toFixed(1) : 0;
         const percentResto = total > 0 ? ((horasProyectosResto / total) * 100).toFixed(1) : 0;
         
+        // If no data, show a placeholder chart
+        const hasData = total > 0;
+        const chartData = hasData 
+            ? [hoursEvolutivos, horasProyectosConceptualizacion, horasProyectosResto]
+            : [1]; // Show a single gray segment when no data
+        
+        const chartLabels = hasData
+            ? ['Evolutivos', 'Proyectos - Conceptualización', 'Proyectos - Resto']
+            : ['Sin datos'];
+        
+        const chartColors = hasData
+            ? ['#64b5f6', '#ffb74d', '#4db6ac']
+            : ['#e0e0e0'];
         
         overviewChartInstances[chartId] = new Chart(ctx, {
             type: 'pie',
             data: {
-                labels: [
-                    'Evolutivos',
-                    'Proyectos - Conceptualización',
-                    'Proyectos - Resto'
-                ],
+                labels: chartLabels,
                 datasets: [{
-                    data: [hoursEvolutivos, horasProyectosConceptualizacion, horasProyectosResto],
-                    backgroundColor: [
-                        '#64b5f6', // Blue for Evolutivos
-                        '#ffb74d', // Orange for Conceptualización
-                        '#4db6ac'  // Teal for Resto
-                    ],
+                    data: chartData,
+                    backgroundColor: chartColors,
                     borderColor: '#ffffff',
                     borderWidth: 2
                 }]
@@ -303,6 +308,9 @@ export async function initializeOverviewSplitHoursChart() {
                         callbacks: {
                             label: function(context) {
                                 const label = context.label || '';
+                                if (label === 'Sin datos') {
+                                    return 'No hay datos para el período seleccionado';
+                                }
                                 const value = context.parsed || 0;
                                 const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                                 return `${label}: ${formatNumber(value)} horas (${percentage}%)`;
