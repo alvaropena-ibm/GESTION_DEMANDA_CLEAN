@@ -10,7 +10,10 @@ function validateTimeEntry(data, isUpdate = false) {
 
     // Required fields for creation
     if (!isUpdate) {
-        if (!data.projectId) errors.push('projectId is required');
+        // Either projectId or jiraTaskId must be provided
+        if (!data.projectId && !data.jiraTaskId) {
+            errors.push('Either projectId or jiraTaskId is required');
+        }
         if (!data.resourceName) errors.push('resourceName is required');
         if (!data.workDate) errors.push('workDate is required');
         if (!data.taskTitle) errors.push('taskTitle is required');

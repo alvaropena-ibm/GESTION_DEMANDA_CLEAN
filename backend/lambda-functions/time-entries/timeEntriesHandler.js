@@ -104,8 +104,9 @@ async function getTimeEntries(queryParams = {}, userTeam) {
         SELECT 
             te.id,
             te.project_id,
+            te.jira_task_id,
             te.resource_id,
-            te.work_date,
+            te.work_date as date,
             te.task_title,
             te.task_description,
             te.activity,
@@ -116,10 +117,14 @@ async function getTimeEntries(queryParams = {}, userTeam) {
             te.updated_at,
             p.code as project_code,
             p.title as project_title,
+            jt.code as jira_task_code,
+            jt.title as jira_task_title,
             r.code as resource_code,
-            r.name as resource_name
+            r.name as resource_name,
+            COALESCE(jt.code, p.code) as projectCode
         FROM time_entries te
         LEFT JOIN projects p ON te.project_id = p.id
+        LEFT JOIN jira_tasks jt ON te.jira_task_id = jt.id
         LEFT JOIN resources r ON te.resource_id = r.id
         WHERE ${whereClause}
         ORDER BY te.work_date DESC
@@ -131,8 +136,10 @@ async function getTimeEntries(queryParams = {}, userTeam) {
     const timeEntries = result.rows.map(row => ({
         id: row.id,
         projectId: row.project_id,
+        jiraTaskId: row.jira_task_id,
+        projectCode: row.projectcode, // Use COALESCE result
         resourceId: row.resource_id,
-        workDate: row.work_date,
+        date: row.date,
         taskTitle: row.task_title,
         taskDescription: row.task_description,
         activity: row.activity,
@@ -142,9 +149,9 @@ async function getTimeEntries(queryParams = {}, userTeam) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         project: {
-            id: row.project_id,
-            code: row.project_code,
-            title: row.project_title
+            id: row.project_id || row.jira_task_id,
+            code: row.projectcode,
+            title: row.project_title || row.jira_task_title
         },
         resource: {
             id: row.resource_id,
@@ -224,6 +231,7 @@ async function createTimeEntry(body, userTeam) {
 
     const {
         projectId,
+        jiraTaskId,
         resourceName,
         resourceEmail,
         workDate,
@@ -234,15 +242,39 @@ async function createTimeEntry(body, userTeam) {
         module
     } = body;
 
-    // 1. Verificar que el proyecto existe
-    const projectCheckSql = `
-        SELECT id FROM projects 
-        WHERE id = $1 AND team = $2
-    `;
-    const projectResult = await query(projectCheckSql, [projectId, userTeam]);
+    // 1. Verificar que el proyecto o jira_task existe
+    let finalProjectId = projectId;
+    let finalJiraTaskId = jiraTaskId;
+    
+    if (jiraTaskId) {
+        // Si se proporciona jiraTaskId, verificar que existe en jira_tasks
+        const jiraTaskCheckSql = `
+            SELECT id FROM jira_tasks 
+            WHERE id = $1 AND team = $2
+        `;
+        const jiraTaskResult = await query(jiraTaskCheckSql, [jiraTaskId, userTeam]);
 
-    if (projectResult.rows.length === 0) {
-        throw new NotFoundError('Project not found');
+        if (jiraTaskResult.rows.length === 0) {
+            throw new NotFoundError('Jira task not found');
+        }
+        
+        // jiraTaskId es válido, projectId puede ser null
+        finalProjectId = null;
+    } else if (projectId) {
+        // Si se proporciona projectId (legacy), verificar que existe en projects
+        const projectCheckSql = `
+            SELECT id FROM projects 
+            WHERE id = $1 AND team = $2
+        `;
+        const projectResult = await query(projectCheckSql, [projectId, userTeam]);
+
+        if (projectResult.rows.length === 0) {
+            throw new NotFoundError('Project not found');
+        }
+        
+        finalJiraTaskId = null;
+    } else {
+        throw new ValidationError('Either projectId or jiraTaskId must be provided');
     }
 
     // 2. Buscar o crear recurso
@@ -279,25 +311,73 @@ async function createTimeEntry(body, userTeam) {
         console.log(`Resource created with ID: ${resourceId}, Email: ${resourceEmail || 'not provided'}`);
     }
 
-    // 3. Crear time entry
-    const insertSql = `
-        INSERT INTO time_entries 
-        (project_id, resource_id, work_date, task_title, task_description, activity, hours, module, team)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING *
+    // 3. Verificar si ya existe una entrada para esta combinación
+    const checkExistingSql = `
+        SELECT id FROM time_entries 
+        WHERE resource_id = $1 
+        AND work_date = $2 
+        AND task_title = $3 
+        AND activity = $4
+        AND COALESCE(module, '') = COALESCE($5, '')
+        AND team = $6
+        AND (
+            (jira_task_id = $7 AND $7 IS NOT NULL) OR
+            (project_id = $8 AND $8 IS NOT NULL)
+        )
     `;
-
-    const insertResult = await query(insertSql, [
-        projectId,
+    
+    const existingResult = await query(checkExistingSql, [
         resourceId,
         workDate,
         taskTitle,
-        taskDescription || null,
         activity,
-        parseFloat(hours),
-        module || null,
-        userTeam
+        module || '',
+        userTeam,
+        finalJiraTaskId,
+        finalProjectId
     ]);
+
+    let insertResult;
+    
+    if (existingResult.rows.length > 0) {
+        // Ya existe, actualizar las horas
+        const existingId = existingResult.rows[0].id;
+        const updateSql = `
+            UPDATE time_entries 
+            SET hours = $1,
+                task_description = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+            RETURNING *
+        `;
+        
+        insertResult = await query(updateSql, [
+            parseFloat(hours),
+            taskDescription || null,
+            existingId
+        ]);
+    } else {
+        // No existe, crear nueva entrada
+        const insertSql = `
+            INSERT INTO time_entries 
+            (project_id, jira_task_id, resource_id, work_date, task_title, task_description, activity, hours, module, team)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING *
+        `;
+
+        insertResult = await query(insertSql, [
+            finalProjectId,
+            finalJiraTaskId,
+            resourceId,
+            workDate,
+            taskTitle,
+            taskDescription || null,
+            activity,
+            parseFloat(hours),
+            module || null,
+            userTeam
+        ]);
+    }
 
     // Obtener datos completos con joins
     const timeEntryResult = await getTimeEntryById(insertResult.rows[0].id, userTeam);

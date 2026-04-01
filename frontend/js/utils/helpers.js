@@ -56,13 +56,15 @@ export function ftesToHours(ftes) {
 export function getStatusText(statusId, type = 'project') {
     // Map status IDs to text for PROJECTS
     const projectStatusMap = {
-        1: 'Conceptualización',
-        2: 'Análisis',
-        3: 'Diseño',
-        4: 'Desarrollo',
-        5: 'Validación',
-        6: 'Producción',
-        7: 'Cerrado'
+        1: 'IDEA',
+        2: 'ON HOLD',
+        3: 'EXPLORACIÓN',
+        4: 'DEFINICIÓN',
+        5: 'DISEÑO FUNCIONAL',
+        6: 'DESARROLLO',
+        7: 'DESCARTADO',
+        8: 'PUBLICACIÓN',
+        9: 'FINALIZADO'
     };
     
     // Map status IDs to text for TASKS

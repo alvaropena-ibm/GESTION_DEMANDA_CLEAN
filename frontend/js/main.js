@@ -139,11 +139,16 @@ async function initializeApp() {
     // Initialize event listeners
     initializeEventListeners();
     
-    // Apply initial period filter to KPIs
+    // Apply initial period filter to KPIs and initialize charts
     const initialPeriod = window.currentPeriod || 'next12';
     console.log('🎯 About to call updateDashboardByPeriod with period:', initialPeriod);
     await updateDashboardByPeriod(initialPeriod);
     console.log('✅ updateDashboardByPeriod completed');
+    
+    // Force initialize charts after everything is loaded
+    console.log('🎨 Force initializing all charts...');
+    await initializeAllCharts();
+    console.log('✅ All charts force initialized');
     
     // Check if we need to activate the projects tab after Jira import
     const activateProjectsTab = sessionStorage.getItem('activate_projects_tab');
@@ -315,7 +320,7 @@ function initializeEventListeners() {
     }
     
     // Tab change listener - reload data when tabs are opened
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', async function(e) {
         const tabButton = e.target.closest('.tab-button');
         if (tabButton) {
             const tabName = tabButton.getAttribute('data-tab');
@@ -329,6 +334,10 @@ function initializeEventListeners() {
             } else if (tabName === 'calendar-tab') {
                 console.log('Calendar tab opened, loading calendar view...');
                 loadCalendarView();
+            } else if (tabName === 'timesheet-tab') {
+                console.log('Timesheet tab opened, initializing timesheet view...');
+                const { initTimesheetView } = await import('./components/timesheetView.js');
+                await initTimesheetView();
             }
         }
     });
@@ -962,9 +971,6 @@ async function updateProjectsTable(projects) {
             <td style="text-align: left;">${project.title}</td>
             <td style="text-align: left;">${truncateText(project.description || '', 50)}</td>
             <td style="text-align: left;">${isAbsencesProject ? '-' : domainText}</td>
-            <td style="text-align: center;"><strong>${estimatedHoursDisplay}</strong></td>
-            <td style="text-align: center;"><strong>${deliveryHoursDisplay}</strong></td>
-            <td style="text-align: center;"><strong>${committedHoursDisplay}</strong></td>
             <td style="text-align: center;">${isAbsencesProject ? '-' : startDate}</td>
             <td style="text-align: center;">${isAbsencesProject ? '-' : endDate}</td>
             <td style="text-align: center;">
@@ -1560,8 +1566,81 @@ async function updateKPIsWithFilteredData(assignments) {
         }
     }
     
+    // Cargar trabajos desde jira_tasks para calcular TRABAJOS ACTIVOS
+    let trabajosActivos = 0;
+    let trabajosEvolutivos = 0;
+    let trabajosProyectos = 0;
+    
+    try {
+        const tasksResponse = await fetch(`${API_CONFIG.BASE_URL}/jira-tasks`, {
+            headers: {
+                'Authorization': authHeader,
+                'x-user-team': userTeam
+            }
+        });
+        
+        if (tasksResponse.ok) {
+            const tasksData = await tasksResponse.json();
+            const allTasks = tasksData.data?.tasks || tasksData.tasks || [];
+            
+            // Contar trabajos únicos que tienen asignaciones en el período
+            const uniqueTasksWithAssignments = new Set();
+            
+            assignments.forEach(assignment => {
+                const hours = parseFloat(assignment.hours) || 0;
+                
+                // Solo contar si tiene horas > 0
+                if (hours > 0) {
+                    // Buscar primero en jira_task_id (para trabajos de jira_tasks)
+                    const jiraTaskId = assignment.jira_task_id || assignment.jiraTaskId;
+                    
+                    if (jiraTaskId) {
+                        const task = allTasks.find(t => t.id === jiraTaskId);
+                        if (task && !task.code.startsWith('ABSENCES')) {
+                            uniqueTasksWithAssignments.add(jiraTaskId);
+                        }
+                    } else {
+                        // Si no tiene jira_task_id, buscar en project_id (para trabajos antiguos o migrados)
+                        const projectId = assignment.project_id || assignment.projectId;
+                        
+                        if (projectId) {
+                            const task = allTasks.find(t => t.id === projectId);
+                            if (task && !task.code.startsWith('ABSENCES')) {
+                                uniqueTasksWithAssignments.add(projectId);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Contar por tipo
+            uniqueTasksWithAssignments.forEach(taskId => {
+                const task = allTasks.find(t => t.id === taskId);
+                if (task) {
+                    trabajosActivos++;
+                    if (task.type === 'Evolutivo') {
+                        trabajosEvolutivos++;
+                    } else if (task.type === 'Proyecto') {
+                        trabajosProyectos++;
+                    }
+                }
+            });
+            
+            console.log('Trabajos activos calculados:', {
+                total: trabajosActivos,
+                evolutivos: trabajosEvolutivos,
+                proyectos: trabajosProyectos,
+                uniqueTasks: uniqueTasksWithAssignments.size,
+                searchedInBothColumns: 'jira_task_id and project_id'
+            });
+        }
+    } catch (error) {
+        console.error('Error loading jira_tasks for KPI:', error);
+    }
+    
     // Update KPI elements (only if they exist)
     const proyectosActivosEl = document.getElementById('proyectos-activos');
+    const trabajosActivosEl = document.getElementById('trabajos-activos');
     const recursosActivosEl = document.getElementById('recursos-activos');
     const capacidadTotalEl = document.getElementById('capacidad-total');
     const horasComprometidasEl = document.getElementById('kpi-horas-comprometidas');
@@ -1572,6 +1651,7 @@ async function updateKPIsWithFilteredData(assignments) {
     
     // Main KPI values (excluding ABSENCES projects)
     if (proyectosActivosEl) proyectosActivosEl.textContent = totalProjectsWithoutAbsences;
+    if (trabajosActivosEl) trabajosActivosEl.textContent = trabajosActivos;
     if (recursosActivosEl) recursosActivosEl.textContent = uniqueResources.size;
     if (capacidadTotalEl) capacidadTotalEl.textContent = formatNumber(totalCapacity);
     if (horasComprometidasEl) horasComprometidasEl.textContent = formatNumber(Math.round(totalCommittedHours));
@@ -1581,6 +1661,12 @@ async function updateKPIsWithFilteredData(assignments) {
     const kpiNumProyectosEl = document.getElementById('kpi-num-proyectos');
     if (kpiNumEvolutivosEl) kpiNumEvolutivosEl.textContent = evolutivosCount;
     if (kpiNumProyectosEl) kpiNumProyectosEl.textContent = proyectosCount;
+    
+    // Sub-KPIs for TRABAJOS ACTIVOS
+    const kpiTrabajosEvolutivosEl = document.getElementById('kpi-trabajos-evolutivos');
+    const kpiTrabajosProyectosEl = document.getElementById('kpi-trabajos-proyectos');
+    if (kpiTrabajosEvolutivosEl) kpiTrabajosEvolutivosEl.textContent = trabajosEvolutivos;
+    if (kpiTrabajosProyectosEl) kpiTrabajosProyectosEl.textContent = trabajosProyectos;
     
     // Sub-KPIs for RECURSOS ACTIVOS
     const kpiAsignados50El = document.getElementById('kpi-asignados-50');
@@ -1621,6 +1707,9 @@ async function updateKPIsWithFilteredData(assignments) {
         totalProjectsIncludingAbsences: uniqueProjects.size,
         evolutivosCount,
         proyectosCount,
+        trabajos: trabajosActivos,
+        trabajosEvolutivos,
+        trabajosProyectos,
         resources: uniqueResources.size,
         resourcesOver50,
         resourcesOver80,

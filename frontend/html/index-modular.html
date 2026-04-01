@@ -117,6 +117,14 @@
                     </svg>
                     Claim
                 </button>
+                <button class="tab-button" data-tab="timesheet-tab">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                        stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Imputación
+                </button>
                 <button class="tab-button" data-tab="calendar-tab">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                         stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
@@ -143,7 +151,7 @@
                         </select>
                     </div>
 
-                    <!-- KPI Grid - 5 KPIs principales -->
+                    <!-- KPI Grid - 6 KPIs principales -->
                     <div class="kpi-grid-overview">
                         <div class="kpi-card">
                             <div class="kpi-header">
@@ -159,6 +167,24 @@
                                 <div style="display: flex; justify-content: space-between;">
                                     <span>Número Proyectos:</span>
                                     <span style="font-weight: 600; color: #509594;" id="kpi-num-proyectos">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <span class="kpi-label">TRABAJOS ACTIVOS</span>
+                            </div>
+                            <div class="kpi-value" id="trabajos-activos">-</div>
+                            <div class="kpi-subtitle">total trabajos</div>
+                            <div class="kpi-details">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>Número Evolutivos:</span>
+                                    <span style="font-weight: 600; color: #509594;" id="kpi-trabajos-evolutivos">-</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>Número Proyectos:</span>
+                                    <span style="font-weight: 600; color: #509594;" id="kpi-trabajos-proyectos">-</span>
                                 </div>
                             </div>
                         </div>
@@ -637,6 +663,56 @@
                 </div>
             </div>
 
+            <!-- Timesheet Tab (Imputación) -->
+            <div id="timesheet-tab" class="tab-content">
+                <div class="section-header">
+                    <h2>Imputación de Horas - Timesheet</h2>
+                </div>
+
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem;">
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <label for="timesheet-week-selector" style="font-weight: 600;">Semana:</label>
+                            <select id="timesheet-week-selector" class="form-control" style="width: 250px;">
+                                <!-- Populated by JavaScript -->
+                            </select>
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem;">
+                            <input type="text" id="timesheet-project-search" class="form-control" 
+                                placeholder="Buscar proyecto..." style="width: 250px;">
+                            
+                            <button class="btn btn-success" id="timesheet-add-row-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                    stroke="currentColor" style="width: 18px; height: 18px;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                                Añadir Fila
+                            </button>
+                            
+                            <button class="btn btn-primary" id="timesheet-save-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                                    stroke="currentColor" style="width: 18px; height: 18px;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                </svg>
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- AG Grid Container -->
+                    <div id="timesheet-grid-container" class="ag-theme-alpine" style="width: 100%; height: 600px;"></div>
+
+                    <!-- Totals Row -->
+                    <div style="margin-top: 1rem; padding: 1rem; background: #f7fafc; border-radius: 0.5rem; display: flex; gap: 1rem; justify-content: space-around;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.875rem; color: #718096; margin-bottom: 0.5rem;">Total Semana</div>
+                            <div style="font-size: 1.5rem; font-weight: 600; color: #319795;" id="timesheet-total-week">0h</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Tasks Tab (Duplicate of Projects) -->
             <div id="tasks-tab" class="tab-content">
                 <div class="section-header">
@@ -739,7 +815,7 @@
                                     <th>Horas Comp.</th>
                                     <th>Fecha Inicio</th>
                                     <th>Fecha Fin</th>
-                                    <th>fixVersions</th>
+                                    <th>Hito</th>
                                     <th>Estado</th>
                                     <th>Tipo</th>
                                     <th style="text-align: center;">Acciones</th>
@@ -847,18 +923,15 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Título</th>
-                                    <th>Descripción</th>
-                                    <th>Dominio Principal</th>
-                                    <th>Horas Est.</th>
-                                    <th>HORAS DEL.</th>
-                                    <th>Horas Comp.</th>
-                                    <th>Fecha Inicio</th>
-                                    <th>Fecha Fin</th>
-                                    <th>Estado</th>
-                                    <th>Tipo</th>
-                                    <th>Acciones</th>
+                                    <th style="width: 100px; min-width: 100px;">ID</th>
+                                    <th style="width: 200px; min-width: 200px;">Título</th>
+                                    <th style="width: 300px; min-width: 300px;">Descripción</th>
+                                    <th style="width: 180px; min-width: 180px;">Dominio Principal</th>
+                                    <th style="width: 120px; min-width: 120px;">Fecha Inicio</th>
+                                    <th style="width: 120px; min-width: 120px;">Fecha Fin</th>
+                                    <th style="width: 180px; min-width: 180px;">Estado</th>
+                                    <th style="width: 120px; min-width: 120px;">Tipo</th>
+                                    <th style="width: 180px; min-width: 180px;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="projects-table-body">
