@@ -109,14 +109,6 @@
                     </svg>
                     Gestión de Trabajo
                 </button>
-                <button class="tab-button" data-tab="claim-tab">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                        stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-                    </svg>
-                    Claim
-                </button>
                 <button class="tab-button" data-tab="timesheet-tab">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                         stroke="currentColor" style="width: 20px; height: 20px; margin-right: 8px;">
@@ -516,94 +508,6 @@
                 </div>
             </div>
 
-            <!-- Claim Tab -->
-            <div id="claim-tab" class="tab-content">
-                <div class="section-header">
-                    <h2>Imputación de Horas</h2>
-                </div>
-
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                        <h2 style="margin-bottom: 0;">Registro de Horas Trabajadas</h2>
-                        <button class="btn btn-primary" id="add-claim-btn">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-                                stroke="currentColor" style="width: 20px; height: 20px;">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                            </svg>
-                            Nueva Imputación
-                        </button>
-                    </div>
-
-                    <!-- Search bar and pagination -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; gap: 1rem;">
-                        <!-- Search on the left -->
-                        <div style="flex: 0 0 300px;">
-                            <input type="text" id="claim-search" class="form-control" 
-                                placeholder="Buscar por proyecto, tarea, actividad, módulo o fecha (DD/MM/YYYY)..."
-                                style="width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.375rem;">
-                        </div>
-                        
-                        <!-- Info text centered -->
-                        <div style="flex: 1; text-align: center;">
-                            <span id="claim-info-text" style="font-size: 0.875rem; color: #718096;">Showing 0-0 of 0 entries</span>
-                        </div>
-                        
-                        <!-- Pagination controls on the right -->
-                        <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem;">
-                            <button id="claim-prev-btn" class="btn" onclick="loadPreviousClaimPage()" disabled>
-                                ←
-                            </button>
-                            <span id="claim-current-page" style="font-weight: 500; color: #2d3748;">Page 1 of 1</span>
-                            <button id="claim-next-btn" class="btn" onclick="loadNextClaimPage()" disabled>
-                                →
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Tabla de imputaciones -->
-                    <div style="overflow-x: auto;">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th style="text-align: left; min-width: 100px;">ID Proyecto</th>
-                                    <th style="text-align: left; min-width: 200px;">Título Proyecto</th>
-                                    <th style="text-align: left; min-width: 150px;">Título Tarea</th>
-                                    <th style="text-align: left; min-width: 200px;">Descripción Tarea</th>
-                                    <th style="text-align: left; min-width: 150px;">Actividad</th>
-                                    <th style="text-align: center; min-width: 120px;">Fecha Trabajo</th>
-                                    <th style="text-align: center; min-width: 100px;">Horas</th>
-                                    <th style="text-align: left; min-width: 150px;">Módulo</th>
-                                    <th style="text-align: center; min-width: 100px;">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="claim-table-body">
-                                <!-- Populated dynamically by JavaScript -->
-                                <tr>
-                                    <td colspan="9" style="text-align: center; padding: 2rem; color: #718096;">
-                                        No hay imputaciones registradas. Haz clic en "Nueva Imputación" para comenzar.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Resumen de horas -->
-                    <div style="margin-top: 2rem; padding: 1rem; background: #f7fafc; border-radius: 0.5rem; display: flex; gap: 2rem; justify-content: space-around;">
-                        <div style="text-align: center;">
-                            <div style="font-size: 0.875rem; color: #718096; margin-bottom: 0.5rem;">Total Horas (Mes Actual)</div>
-                            <div style="font-size: 1.5rem; font-weight: 600; color: #319795;" id="claim-total-month">0h</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 0.875rem; color: #718096; margin-bottom: 0.5rem;">Total Horas (Semana Actual)</div>
-                            <div style="font-size: 1.5rem; font-weight: 600; color: #319795;" id="claim-total-week">0h</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 0.875rem; color: #718096; margin-bottom: 0.5rem;">Total Horas (Hoy)</div>
-                            <div style="font-size: 1.5rem; font-weight: 600; color: #319795;" id="claim-total-today">0h</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- Calendar Tab -->
             <div id="calendar-tab" class="tab-content">

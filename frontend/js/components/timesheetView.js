@@ -10,6 +10,9 @@ import { showNotification } from '../utils/helpers.js';
 let gridApi = null;
 let gridColumnApi = null;
 
+// Save state
+let isSaving = false;
+
 // Current data
 let currentWeekStart = null;
 let currentResourceId = null;
@@ -447,6 +450,14 @@ function generateDateColumns() {
  * Initialize AG Grid
  */
 async function initializeAGGrid() {
+    // Destroy existing grid instance if it exists
+    if (gridApi) {
+        console.log('Destroying existing grid instance...');
+        gridApi.destroy();
+        gridApi = null;
+        gridColumnApi = null;
+    }
+    
     // Load AG Grid library if not loaded
     if (!window.agGrid) {
         await window.loadAGGrid();
@@ -454,6 +465,9 @@ async function initializeAGGrid() {
     
     const container = document.getElementById('timesheet-grid-container');
     if (!container) return;
+    
+    // Clear container to ensure clean slate
+    container.innerHTML = '';
     
     // Prepare data structure
     const rowData = prepareGridData();
@@ -770,6 +784,15 @@ function filterGrid(searchText) {
 async function saveTimesheet() {
     if (!gridApi) return;
     
+    // Prevent multiple simultaneous saves
+    if (isSaving) {
+        console.log('Save already in progress, ignoring request');
+        showNotification('Ya hay un guardado en progreso...', 'info');
+        return;
+    }
+    
+    isSaving = true;
+    
     try {
         const authType = sessionStorage.getItem('auth_type');
         let awsAccessKey;
@@ -942,6 +965,9 @@ async function saveTimesheet() {
     } catch (error) {
         console.error('Error saving timesheet:', error);
         showNotification('Error al guardar las imputaciones: ' + error.message, 'error');
+    } finally {
+        // Reset saving flag
+        isSaving = false;
     }
 }
 

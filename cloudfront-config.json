@@ -1,0 +1,20 @@
+{
+  "cloudfront": {
+    "distributionId": "E3NQXQXQXQXQXQ",
+    "domain": "d3ao8ook2gaeu9.cloudfront.net",
+    "urls": {
+      "login": "https://d3ao8ook2gaeu9.cloudfront.net/html/login-new.html",
+      "mainApp": "https://d3ao8ook2gaeu9.cloudfront.net/html/index-modular.html"
+    }
+  },
+  "s3": {
+    "bucket": "gestion-demanda-frontend",
+    "region": "us-east-1"
+  },
+  "deployment": {
+    "cacheControl": {
+      "html": "no-cache, no-store, must-revalidate",
+      "static": "public, max-age=31536000"
+    }
+  }
+}

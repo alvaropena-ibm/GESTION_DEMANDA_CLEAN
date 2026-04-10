@@ -28,7 +28,6 @@ import { CreateTaskModal } from './components/createTaskModal.js';
 import { ResourceCapacityModal } from './components/resourceCapacityModal.js';
 import { JiraModal } from './components/jiraModal.js';
 import jiraTasksModal from './components/jiraTasksModal.js';
-import { initializeClaimModal } from './components/claimModal.js';
 import { openAssignmentView } from './components/assignmentView.js';
 import { initializeResourceCapacity } from './components/resourceCapacity.js';
 import { initializeCalendarView, loadCalendarView } from './components/calendarView.js';
@@ -90,7 +89,6 @@ async function initializeApp() {
     initProjectModal();
     initResourceModal();
     initializeResourceCapacity();
-    initializeClaimModal();
     initializeCalendarView();
     
     // Initialize modals
