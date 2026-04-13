@@ -128,8 +128,11 @@ function buildCapacityData(resources, assignments) {
     const resourcesWithMonthlyData = resources.map(resource => {
         const monthlyData = [];
         
-        // Get assignments for this resource
-        const resourceAssignments = assignments.filter(a => a.resourceId === resource.id);
+        // Get assignments for this resource (support both snake_case and camelCase)
+        const resourceAssignments = assignments.filter(a => {
+            const assignmentResourceId = a.resource_id || a.resourceId;
+            return assignmentResourceId === resource.id;
+        });
         
         // Build monthly data for each month
         for (let month = 1; month <= 12; month++) {

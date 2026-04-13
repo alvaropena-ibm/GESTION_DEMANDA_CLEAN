@@ -1381,6 +1381,19 @@ async function updateDashboardByPeriod(period) {
         const data = await response.json();
         const allAssignments = data.data?.assignments || data.assignments || [];
         
+        // Load jira_tasks to have them available for KPI calculations
+        const tasksResponse = await fetch(`${API_CONFIG.BASE_URL}/jira-tasks`, {
+            headers: {
+                'Authorization': authHeader,
+                'x-user-team': userTeam
+            }
+        });
+        
+        if (tasksResponse.ok) {
+            const tasksData = await tasksResponse.json();
+            window.allTasks = tasksData.data?.tasks || tasksData.tasks || [];
+            console.log('✅ window.allTasks loaded for KPI calculation:', window.allTasks.length, 'tasks');
+        }
         
         // Filter assignments by date range
         const filteredAssignments = allAssignments.filter(assignment => {
@@ -1422,23 +1435,64 @@ async function updateKPIsWithFilteredData(assignments) {
     // IMPORTANT: Only count projects that have committed hours in the selected period
     // and are not ABSENCES projects
     
-    assignments.forEach(assignment => {
+    console.log('🔍 DEBUG: Starting KPI calculation');
+    console.log('Total assignments to process:', assignments.length);
+    console.log('window.allTasks available:', !!window.allTasks, 'Count:', window.allTasks?.length || 0);
+    console.log('window.allProjects available:', !!window.allProjects, 'Count:', window.allProjects?.length || 0);
+    
+    assignments.forEach((assignment, index) => {
         const hours = parseFloat(assignment.hours) || 0;
         
         // Map snake_case to camelCase
+        const jiraTaskId = assignment.jira_task_id || assignment.jiraTaskId;
         const projectId = assignment.project_id || assignment.projectId;
         const resourceId = assignment.resource_id || assignment.resourceId;
         
+        if (index < 3) {
+            console.log(`Assignment ${index}:`, {
+                hours,
+                jiraTaskId,
+                projectId,
+                resourceId,
+                month: assignment.month,
+                year: assignment.year
+            });
+        }
         
         // Only process assignments with hours > 0
-        if (hours > 0 && projectId && window.allProjects) {
-            const project = window.allProjects.find(p => p.id === projectId);
+        if (hours > 0) {
+            let task = null;
+            let taskId = null;
             
+            // First try to find in jira_tasks using jira_task_id
+            if (jiraTaskId && window.allTasks) {
+                task = window.allTasks.find(t => t.id === jiraTaskId);
+                taskId = jiraTaskId;
+                if (index < 3) console.log(`  Found in allTasks:`, !!task, task?.code);
+            }
             
-            // EXCLUDE ABSENCES projects from KPIs
-            if (project && !project.code.startsWith('ABSENCES')) {
+            // Fallback: try to find in projects using project_id
+            if (!task && projectId && window.allProjects) {
+                task = window.allProjects.find(p => p.id === projectId);
+                taskId = projectId;
+                if (index < 3) console.log(`  Found in allProjects:`, !!task, task?.code);
+            }
+            
+            if (index < 3) {
+                console.log(`  Task found:`, !!task);
+                if (task) {
+                    console.log(`  Task details:`, {
+                        code: task.code,
+                        type: task.type,
+                        isAbsences: task.code.startsWith('ABSENCES')
+                    });
+                }
+            }
+            
+            // EXCLUDE ABSENCES tasks/projects from KPIs
+            if (task && !task.code.startsWith('ABSENCES')) {
                 // Add to unique projects (only if has hours in this period)
-                uniqueProjects.add(projectId);
+                uniqueProjects.add(taskId);
                 
                 // Sum total hours
                 totalHours += hours;
@@ -1448,10 +1502,17 @@ async function updateKPIsWithFilteredData(assignments) {
                 }
                 
                 // Calculate hours by project type
-                if (project.type === 'Evolutivo') {
+                // If type is not defined, default to 'Proyecto'
+                const taskType = task.type || 'Proyecto';
+                if (taskType === 'Evolutivo') {
                     hoursEvolutivos += hours;
-                } else if (project.type === 'Proyecto') {
+                } else {
+                    // Default to Proyecto if not Evolutivo
                     horasProyectos += hours;
+                }
+                
+                if (index < 3) {
+                    console.log(`  ✅ Added ${hours}h to totals`);
                 }
             }
         }
@@ -1461,6 +1522,11 @@ async function updateKPIsWithFilteredData(assignments) {
             uniqueResources.add(resourceId);
         }
     });
+    
+    console.log('🔍 DEBUG: KPI calculation complete');
+    console.log('Total hours calculated:', totalHours);
+    console.log('Hours Evolutivos:', hoursEvolutivos);
+    console.log('Hours Proyectos:', horasProyectos);
     
     // Count projects by type from unique project IDs (excluding ABSENCES)
     // These are ACTIVE projects = projects with committed hours in the selected period
