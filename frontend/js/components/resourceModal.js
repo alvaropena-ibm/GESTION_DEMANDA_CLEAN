@@ -417,6 +417,65 @@ function clearFormErrors() {
 }
 
 /**
+ * Check if a resource name already exists
+ * @param {string} name - Resource name to check
+ * @param {string} currentId - Current resource ID (null for new resources)
+ * @param {string} awsAccessKey - AWS access key
+ * @param {string} userTeam - User team
+ * @param {string} authHeader - Authorization header
+ * @returns {Promise<boolean>} - True if duplicate exists
+ */
+async function checkDuplicateResourceName(name, currentId, awsAccessKey, userTeam, authHeader) {
+    try {
+        console.log('Checking for duplicate resource name:', name);
+        
+        // Fetch all resources for the team
+        const response = await fetch(`${API_CONFIG.BASE_URL}/resources`, {
+            headers: {
+                'Authorization': authHeader,
+                'x-user-team': userTeam
+            }
+        });
+        
+        if (!response.ok) {
+            console.error('Error fetching resources for duplicate check');
+            return false; // If we can't check, allow the save to proceed
+        }
+        
+        const data = await response.json();
+        const resources = data.data?.resources || data.resources || [];
+        
+        // Normalize the name for comparison (lowercase, trim, remove extra spaces)
+        const normalizedName = name.toLowerCase().trim().replace(/\s+/g, ' ');
+        
+        // Check if any resource has the same name (case-insensitive)
+        const duplicate = resources.find(resource => {
+            // Skip the current resource if we're editing
+            if (currentId && resource.id === currentId) {
+                return false;
+            }
+            
+            // Normalize the existing resource name
+            const existingName = (resource.name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+            
+            return existingName === normalizedName;
+        });
+        
+        if (duplicate) {
+            console.log('Duplicate resource found:', duplicate);
+            return true;
+        }
+        
+        console.log('No duplicate found');
+        return false;
+        
+    } catch (error) {
+        console.error('Error checking for duplicate resource name:', error);
+        return false; // If there's an error, allow the save to proceed
+    }
+}
+
+/**
  * Save resource (create or update)
  */
 export async function saveResource() {
@@ -444,6 +503,7 @@ export async function saveResource() {
     
     // Get form data
     const emailValue = document.getElementById('resourceEmail').value.trim();
+    const resourceName = document.getElementById('resourceName').value.trim();
     
     // Get authentication tokens - support both Cognito and IAM
     const authType = sessionStorage.getItem('auth_type');
@@ -459,10 +519,52 @@ export async function saveResource() {
     
     if (!awsAccessKey || !userTeam) {
         showNotification('No se encontró información de autenticación', 'error');
+        // Reset saving flag and re-enable button
+        isSaving = false;
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.style.opacity = '1';
+            saveButton.style.cursor = 'pointer';
+        }
         return;
     }
     
     const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+    
+    // Check for duplicate name before saving
+    try {
+        const isDuplicate = await checkDuplicateResourceName(resourceName, currentResourceId, awsAccessKey, userTeam, authHeader);
+        if (isDuplicate) {
+            showNotification(`Ya existe un recurso con el nombre "${resourceName}". Por favor, usa un nombre diferente.`, 'error');
+            // Reset saving flag and re-enable button
+            isSaving = false;
+            if (saveButton) {
+                saveButton.disabled = false;
+                saveButton.style.opacity = '1';
+                saveButton.style.cursor = 'pointer';
+            }
+            // Highlight the name field with error
+            const nameField = document.getElementById('resourceName');
+            const nameError = document.getElementById('resourceNameError');
+            nameField.classList.add('error');
+            if (nameError) {
+                nameError.classList.add('active');
+                nameError.textContent = 'Este nombre ya está en uso';
+            }
+            return;
+        }
+    } catch (error) {
+        console.error('Error checking for duplicate name:', error);
+        showNotification('Error al verificar el nombre del recurso', 'error');
+        // Reset saving flag and re-enable button
+        isSaving = false;
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.style.opacity = '1';
+            saveButton.style.cursor = 'pointer';
+        }
+        return;
+    }
     
     // Get selected skills
     const selectedSkills = Array.from(
@@ -473,7 +575,7 @@ export async function saveResource() {
     }));
     
     // Generate resource code from name (initials + timestamp)
-    const resourceName = document.getElementById('resourceName').value.trim();
+    // resourceName already defined above, so reuse it
     const nameParts = resourceName.split(' ');
     const initials = nameParts.map(part => part.charAt(0).toUpperCase()).join('');
     const timestamp = Date.now().toString().slice(-4);

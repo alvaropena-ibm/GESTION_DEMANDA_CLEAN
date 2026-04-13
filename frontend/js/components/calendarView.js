@@ -254,10 +254,12 @@ function truncateText(text, maxLength = 100) {
 function groupTimeEntriesForGrid(entries) {
     const groupMap = new Map();
     
+    console.log(`Grouping ${entries.length} entries for grid...`);
+    
     entries.forEach(entry => {
-        const projectId = entry.project?.code || entry.projectId || 'N/A';
-        const projectTitle = entry.project?.title || 'Sin título';
-        const resourceName = entry.resource?.name || 'Sin recurso';
+        const projectId = entry.project?.code || entry.projectCode || entry.projectId || 'N/A';
+        const projectTitle = entry.project?.title || entry.projectTitle || 'Sin título';
+        const resourceName = entry.resource?.name || entry.resourceName || 'Sin recurso';
         const taskTitle = entry.taskTitle || 'Sin título';
         const taskDescription = entry.taskDescription || '';
         
@@ -277,13 +279,34 @@ function groupTimeEntriesForGrid(entries) {
         const group = groupMap.get(key);
         
         // Add hours to the appropriate date
-        if (entry.workDate) {
-            const dateStr = entry.workDate.toString().split('T')[0]; // YYYY-MM-DD
-            group[dateStr] = (group[dateStr] || 0) + parseFloat(entry.hours || 0);
+        // Handle both date formats: Date object, ISO string, or YYYY-MM-DD string
+        if (entry.workDate || entry.date) {
+            const dateValue = entry.workDate || entry.date;
+            let dateStr;
+            
+            if (dateValue instanceof Date) {
+                // If it's a Date object, format it
+                const year = dateValue.getFullYear();
+                const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+                const day = String(dateValue.getDate()).padStart(2, '0');
+                dateStr = `${year}-${month}-${day}`;
+            } else {
+                // If it's a string, extract YYYY-MM-DD part
+                dateStr = dateValue.toString().split('T')[0];
+            }
+            
+            const hours = parseFloat(entry.hours || 0);
+            group[dateStr] = (group[dateStr] || 0) + hours;
+            
+            console.log(`Added ${hours}h to ${dateStr} for ${projectId} - ${resourceName} - ${taskTitle}`);
         }
     });
     
-    return Array.from(groupMap.values());
+    const result = Array.from(groupMap.values());
+    console.log(`Grouped into ${result.length} rows`);
+    console.log('Sample grouped row:', result[0]);
+    
+    return result;
 }
 
 /**

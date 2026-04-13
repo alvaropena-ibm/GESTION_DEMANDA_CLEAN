@@ -18,6 +18,26 @@ export class ResourceCapacityModal {
     }
 
     /**
+     * Get authentication credentials (supports both Cognito and IAM)
+     * @returns {Object} Object with awsAccessKey, userTeam, and authHeader
+     */
+    getAuthCredentials() {
+        const authType = sessionStorage.getItem('auth_type');
+        let awsAccessKey;
+        
+        if (authType === 'cognito') {
+            awsAccessKey = sessionStorage.getItem('cognito_access_token');
+        } else {
+            awsAccessKey = sessionStorage.getItem('aws_access_key');
+        }
+        
+        const userTeam = sessionStorage.getItem('user_team');
+        const authHeader = authType === 'cognito' ? `Bearer ${awsAccessKey}` : awsAccessKey;
+        
+        return { awsAccessKey, userTeam, authHeader, authType };
+    }
+
+    /**
      * Initialize the modal
      */
     init() {
@@ -150,8 +170,7 @@ export class ResourceCapacityModal {
         try {
             console.log('Loading resource data for ID:', resourceId);
             
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const { awsAccessKey, userTeam, authHeader } = this.getAuthCredentials();
             
             if (!awsAccessKey || !userTeam) {
                 console.error('No authentication tokens found');
@@ -162,7 +181,7 @@ export class ResourceCapacityModal {
             
             const response = await fetch(`${API_CONFIG.BASE_URL}/resources/${resourceId}`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
@@ -194,8 +213,7 @@ export class ResourceCapacityModal {
      */
     async loadCommittedHoursAndAbsences(resourceId) {
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const { awsAccessKey, userTeam, authHeader } = this.getAuthCredentials();
             
             if (!awsAccessKey || !userTeam) {
                 throw new Error('No authentication tokens found');
@@ -203,7 +221,7 @@ export class ResourceCapacityModal {
             
             const response = await fetch(`${API_CONFIG.BASE_URL}/assignments?resourceId=${resourceId}`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
@@ -751,8 +769,7 @@ export class ResourceCapacityModal {
         console.log('Saving resource info:', { name, email, skills: selectedSkills });
 
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const { awsAccessKey, userTeam, authHeader } = this.getAuthCredentials();
             
             if (!awsAccessKey || !userTeam) {
                 throw new Error('No authentication tokens found');
@@ -766,7 +783,7 @@ export class ResourceCapacityModal {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 },
                 body: JSON.stringify({
@@ -835,8 +852,7 @@ export class ResourceCapacityModal {
         if (!this.gridApi) return;
 
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const { awsAccessKey, userTeam, authHeader } = this.getAuthCredentials();
             
             if (!awsAccessKey || !userTeam) {
                 throw new Error('No authentication tokens found');
@@ -858,14 +874,14 @@ export class ResourceCapacityModal {
             console.log('Saving capacity data:', capacityData);
 
             // Get or create special "ABSENCES" project
-            const absencesProject = await this.getOrCreateAbsencesProject(awsAccessKey, userTeam);
+            const absencesProject = await this.getOrCreateAbsencesProject(authHeader, userTeam);
             
             if (!absencesProject) {
                 throw new Error('Could not create absences project');
             }
 
             // Delete existing absences for this resource
-            await this.deleteExistingAbsences(this.resourceId, absencesProject.id, awsAccessKey, userTeam);
+            await this.deleteExistingAbsences(this.resourceId, absencesProject.id, authHeader, userTeam);
 
             // Save new absences as assignments
             const absencesData = capacityData.ausencias || {};
@@ -873,7 +889,7 @@ export class ResourceCapacityModal {
                 this.resourceId, 
                 absencesProject.id, 
                 absencesData,
-                awsAccessKey,
+                authHeader,
                 userTeam
             );
 
@@ -890,7 +906,7 @@ export class ResourceCapacityModal {
     /**
      * Get or create the special ABSENCES project for this team
      */
-    async getOrCreateAbsencesProject(awsAccessKey, userTeam) {
+    async getOrCreateAbsencesProject(authHeader, userTeam) {
         try {
             // Use team-specific code: ABSENCES-{TEAM}
             const projectCode = `ABSENCES-${userTeam}`;
@@ -898,7 +914,7 @@ export class ResourceCapacityModal {
             // Try to get existing ABSENCES project for this team
             const getResponse = await fetch(`${API_CONFIG.BASE_URL}/projects`, {
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
@@ -920,7 +936,7 @@ export class ResourceCapacityModal {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 },
                 body: JSON.stringify({
@@ -946,7 +962,7 @@ export class ResourceCapacityModal {
                     
                     const retryResponse = await fetch(`${API_CONFIG.BASE_URL}/projects`, {
                         headers: {
-                            'Authorization': awsAccessKey,
+                            'Authorization': authHeader,
                             'x-user-team': userTeam
                         }
                     });
@@ -994,14 +1010,14 @@ export class ResourceCapacityModal {
     /**
      * Delete existing absences for this resource
      */
-    async deleteExistingAbsences(resourceId, projectId, awsAccessKey, userTeam) {
+    async deleteExistingAbsences(resourceId, projectId, authHeader, userTeam) {
         try {
             const response = await fetch(
                 `${API_CONFIG.BASE_URL}/assignments?projectId=${projectId}&resourceId=${resourceId}`,
                 {
                     method: 'GET',
                     headers: {
-                        'Authorization': awsAccessKey,
+                        'Authorization': authHeader,
                         'x-user-team': userTeam
                     }
                 }
@@ -1017,7 +1033,7 @@ export class ResourceCapacityModal {
                 await fetch(`${API_CONFIG.BASE_URL}/assignments/${assignment.id}`, {
                     method: 'DELETE',
                     headers: {
-                        'Authorization': awsAccessKey,
+                        'Authorization': authHeader,
                         'x-user-team': userTeam
                     }
                 });
@@ -1033,7 +1049,7 @@ export class ResourceCapacityModal {
     /**
      * Save absences as assignments
      */
-    async saveAbsencesAsAssignments(resourceId, projectId, absencesData, awsAccessKey, userTeam) {
+    async saveAbsencesAsAssignments(resourceId, projectId, absencesData, authHeader, userTeam) {
         let savedCount = 0;
         
         for (const [date, hours] of Object.entries(absencesData)) {
@@ -1045,7 +1061,7 @@ export class ResourceCapacityModal {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': awsAccessKey,
+                        'Authorization': authHeader,
                         'x-user-team': userTeam
                     },
                     body: JSON.stringify({
@@ -1080,7 +1096,7 @@ export class ResourceCapacityModal {
      * This method is kept for compatibility but does nothing since skills
      * are already updated in saveResourceInfo()
      */
-    async updateResourceSkills(resourceId, skills, awsAccessKey, userTeam) {
+    async updateResourceSkills(resourceId, skills, authHeader, userTeam) {
         console.log('Skills already updated via PUT /resources/{id}');
         // Skills are updated in the main PUT request, no separate call needed
         return Promise.resolve();
@@ -1169,8 +1185,7 @@ export class ResourceCapacityModal {
         this.isDeleting = true;
         
         try {
-            const awsAccessKey = sessionStorage.getItem('aws_access_key');
-            const userTeam = sessionStorage.getItem('user_team');
+            const { awsAccessKey, userTeam, authHeader } = this.getAuthCredentials();
             
             if (!awsAccessKey || !userTeam) {
                 throw new Error('No authentication tokens found');
@@ -1182,7 +1197,7 @@ export class ResourceCapacityModal {
             const response = await fetch(`${API_CONFIG.BASE_URL}/resources/${this.resourceId}`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': awsAccessKey,
+                    'Authorization': authHeader,
                     'x-user-team': userTeam
                 }
             });
