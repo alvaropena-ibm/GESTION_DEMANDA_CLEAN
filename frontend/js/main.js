@@ -850,8 +850,8 @@ async function updateProjectsTable(projects) {
     // Store all projects (including ABSENCES)
     const allProjectsRaw = projects || [];
     
-    // INCLUDE ABSENCES projects in the main table
-    allProjects = [...allProjectsRaw];
+    // FILTER OUT ABSENCES projects from the main table (Gestión de Solicitudes)
+    allProjects = allProjectsRaw.filter(p => !p.code.startsWith('ABSENCES'));
     
     console.log('All projects loaded (including ABSENCES):', allProjects.length);
     
