@@ -1,6 +1,6 @@
 /**
  * Login Page Logic
- * Maneja autenticación con Cognito e IAM
+ * Maneja autenticación con Cognito
  */
 
 import authService from './services/authService.js';
@@ -8,34 +8,6 @@ import authService from './services/authService.js';
 // Variables globales para el modal de cambio de contraseña
 let passwordChangeSession = null;
 let passwordChangeEmail = null;
-
-/**
- * Cambiar entre tabs de autenticación
- */
-window.switchTab = function(tab) {
-    // Actualizar botones de tabs
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-    
-    // Actualizar formularios
-    document.querySelectorAll('.auth-form').forEach(form => {
-        form.classList.remove('active');
-    });
-    document.getElementById(`${tab}-form`).classList.add('active');
-    
-    // Limpiar mensajes
-    hideError();
-    hideSuccess();
-    
-    // Focus en primer campo
-    if (tab === 'cognito') {
-        document.getElementById('cognito-email').focus();
-    } else {
-        document.getElementById('access-key').focus();
-    }
-};
 
 /**
  * Login con Cognito
@@ -85,40 +57,6 @@ window.loginWithCognito = async function() {
     }
 };
 
-/**
- * Login con IAM
- */
-window.loginWithIAM = async function() {
-    const accessKey = document.getElementById('access-key').value.trim();
-    const secretKey = document.getElementById('secret-key').value.trim();
-    const loginBtn = document.getElementById('iam-login-btn');
-    
-    // Validación
-    if (!accessKey || !secretKey) {
-        showError('Por favor, introduce tus credenciales de AWS');
-        return;
-    }
-    
-    // Mostrar loading
-    setButtonLoading(loginBtn, true);
-    hideError();
-    
-    try {
-        const result = await authService.loginWithIAM(accessKey, secretKey);
-        
-        if (result.success) {
-            // Login exitoso
-            setButtonSuccess(loginBtn);
-            setTimeout(() => {
-                window.location.href = 'index-modular.html';
-            }, 1000);
-        }
-    } catch (error) {
-        console.error('IAM login error:', error);
-        showError(error.message || 'Error al iniciar sesión. Verifica tus credenciales de AWS.');
-        setButtonLoading(loginBtn, false);
-    }
-};
 
 /**
  * Mostrar modal de cambio de contraseña
@@ -248,22 +186,12 @@ function setButtonLoading(button, loading) {
         `;
     } else {
         button.disabled = false;
-        // Restaurar contenido original según el botón
-        if (button.id === 'cognito-login-btn') {
-            button.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                </svg>
-                Iniciar Sesión
-            `;
-        } else {
-            button.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
-                </svg>
-                Iniciar Sesión
-            `;
-        }
+        button.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+            </svg>
+            Iniciar Sesión
+        `;
     }
 }
 
@@ -291,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Focus en primer campo
     document.getElementById('cognito-email').focus();
     
-    // Enter key en formulario de Cognito
+    // Enter key en formulario de login
     document.getElementById('cognito-email').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             document.getElementById('cognito-password').focus();
@@ -304,24 +232,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Enter key en formulario de IAM
-    document.getElementById('access-key').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            document.getElementById('secret-key').focus();
-        }
-    });
-    
-    document.getElementById('secret-key').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            loginWithIAM();
-        }
-    });
-    
     // Limpiar errores al escribir
     document.getElementById('cognito-email').addEventListener('input', hideError);
     document.getElementById('cognito-password').addEventListener('input', hideError);
-    document.getElementById('access-key').addEventListener('input', hideError);
-    document.getElementById('secret-key').addEventListener('input', hideError);
     
     // Enter key en modal de cambio de contraseña
     document.getElementById('new-password').addEventListener('keypress', function(e) {

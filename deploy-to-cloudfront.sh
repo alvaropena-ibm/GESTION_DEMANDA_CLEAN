@@ -6,7 +6,7 @@
 set -e  # Exit on error
 
 # Configuration
-CLOUDFRONT_DISTRIBUTION_ID="E1YJBKJGFCRQH3"  # Distribution for d3ao8ook2gaeu9.cloudfront.net
+CLOUDFRONT_DISTRIBUTION_ID="E3TOPO1X778CQ6"  # Distribution for d3ao8ook2gaeu9.cloudfront.net
 S3_BUCKET="s3://gestion-demanda-frontend"  # S3 bucket backing CloudFront
 FRONTEND_DIR="./frontend"
 
